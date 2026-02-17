@@ -1,0 +1,22 @@
+# https://www.robotstxt.org/robotstxt.html
+User-agent: *
+Allow: /
+Disallow: /dashboard/
+Disallow: /login
+Disallow: /api/
+
+# Sitemap
+Sitemap: https://rrenterprise.com/sitemap.xml
+
+# Crawl-delay
+Crawl-delay: 1
+
+# Common crawlers
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: Slurp
+Allow: /
