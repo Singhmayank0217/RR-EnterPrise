@@ -8,7 +8,7 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api': {
-        target: 'https://rr-enterprise.onrender.com/',
+        target: 'https://rr-enterprise.onrender.com',
         changeOrigin: true
       }
     }
