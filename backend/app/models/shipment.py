@@ -65,7 +65,7 @@ class ShipmentUpdate(BaseModel):
 class ShipmentInDB(ShipmentBase):
     id: str = Field(alias="_id")
     tracking_number: str
-    customer_id: str
+    customer_id: Optional[str] = None
     status: ShipmentStatus = ShipmentStatus.PENDING
     tracking_history: List[TrackingEvent] = []
     pricing: Optional[dict] = None  # Calculated pricing details
@@ -82,7 +82,7 @@ class ShipmentInDB(ShipmentBase):
 class ShipmentResponse(ShipmentBase):
     id: str = Field(alias="_id")
     tracking_number: str
-    customer_id: str
+    customer_id: Optional[str] = None
     origin: Optional[dict] = None
     destination: Optional[dict] = None
     status: Optional[str] = None

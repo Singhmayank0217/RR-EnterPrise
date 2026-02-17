@@ -38,7 +38,7 @@ class PaymentRecord(BaseModel):
 
 
 class InvoiceBase(BaseModel):
-    customer_id: str
+    customer_id: Optional[str] = None
     customer_name: str
     customer_email: Optional[str] = None
     customer_phone: Optional[str] = None
@@ -92,7 +92,7 @@ class InvoiceResponse(InvoiceBase):
     payment_status: Optional[str] = Field(default=PaymentStatus.PENDING)
     payments: List[PaymentRecord] = []
     due_date: Optional[str | date] = None
-    created_at: datetime
+    created_at: Optional[datetime] = None
 
     class Config:
         populate_by_name = True

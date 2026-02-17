@@ -54,9 +54,9 @@ class UserInDB(UserBase):
 
 class UserResponse(UserBase):
     id: str = Field(alias="_id")
-    created_at: datetime
+    created_at: Optional[datetime] = None
     updated_at: datetime = None
-    permissions: List[str] = []
+    permissions: List[str] = Field(default_factory=list)
 
     class Config:
         populate_by_name = True
