@@ -2,7 +2,7 @@ import requests
 import time
 
 def check():
-    base = "http://localhost:8000/api"
+    base = "https://rr-enterprise.onrender.com/api"
     try:
         # Auth
         resp = requests.post(f"{base}/auth/token", data={"username": "admin@rrenterprise.com", "password": "admin123"})

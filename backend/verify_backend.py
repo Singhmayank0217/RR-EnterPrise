@@ -1,7 +1,7 @@
 import requests
 import json
 
-BASE_URL = "http://localhost:8000/api"
+BASE_URL = "https://rr-enterprise.onrender.com/api"
 
 def main():
     # Login
