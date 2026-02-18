@@ -287,7 +287,7 @@
   display: block;
   margin-bottom: 0.5rem;
   font-weight: 600;
-  color: var(--text-dark);
+  color: white !important;
   font-size: 0.85rem;
 }
 
@@ -415,13 +415,13 @@
 }
 
 .stat-label {
-  color: #1E1B4B;
+  color: #1E1B4B !important;
   font-size: 0.9rem;
   font-weight: 700;
 }
 
 .stat-value {
-  color: #3A3185;
+  color: #3A3185 !important;
   font-size: 1.5rem;
   font-weight: 800;
   letter-spacing: -0.02em;
