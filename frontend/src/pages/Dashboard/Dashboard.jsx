@@ -66,10 +66,10 @@ export default function Dashboard() {
                 </NavLink>
               )}
 
-              <NavLink to="/dashboard/pricing" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} title="Configure shipping rates and pricing rules">
+              {/* <NavLink to="/dashboard/pricing" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} title="Configure shipping rates and pricing rules">
                 <DollarSign size={20} />
                 <span>Pricing Rules</span>
-              </NavLink>
+              </NavLink> */}
 
               <NavLink to="/dashboard/rate-cards" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} title="Manage user-specific rate cards">
                 <CreditCard size={20} />

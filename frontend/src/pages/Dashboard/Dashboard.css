@@ -72,6 +72,10 @@
   background: #ffffff;
 }
 
+/* .form-group label{
+  color:white ;
+} */
+
 .nav-item::before {
   content: '';
   position: absolute;
@@ -86,6 +90,8 @@
 .nav-item:hover::before {
   width: 100%;
 }
+
+
 
 .nav-item:hover {
   color: white;

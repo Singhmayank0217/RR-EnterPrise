@@ -210,21 +210,26 @@ function UserDetailsModal({ user, onClose }) {
   }, [user._id]);
 
   const loadUserData = async () => {
+    setLoading(true);
+    const userId = user._id || user.id;
     try {
       const [consignmentsRes, invoicesRes, rateCardsRes] = await Promise.allSettled([
-        consignmentsAPI.list({ user_id: user._id }),
-        invoicesAPI.list({ customer_id: user._id }),
-        rateCardsAPI.getByUser(user._id)
+        consignmentsAPI.getByUser(userId),
+        invoicesAPI.list({ customer_id: userId }),
+        rateCardsAPI.getByUser(userId)
       ]);
       
       if (consignmentsRes.status === 'fulfilled') {
-        setConsignments(consignmentsRes.value.data || []);
+        const data = consignmentsRes.value.data;
+        setConsignments(Array.isArray(data) ? data : []);
       }
       if (invoicesRes.status === 'fulfilled') {
-        setInvoices(invoicesRes.value.data || []);
+        const data = invoicesRes.value.data;
+        setInvoices(Array.isArray(data) ? data : []);
       }
       if (rateCardsRes.status === 'fulfilled') {
-        setRateCards(rateCardsRes.value.data || []);
+        const data = rateCardsRes.value.data;
+        setRateCards(Array.isArray(data) ? data : []);
       }
     } catch (error) {
       console.error('Failed to load user data:', error);
@@ -855,7 +860,7 @@ function CreateUserModal({ onClose, onSuccess, pricingRules = [] }) {
                   {/* Row 2: Pricing Fields */}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '0.75rem' }}>
                     <div className="form-group" style={{ marginBottom: 0 }}>
-                      <label style={{ fontSize: '0.8rem' }}>Base Rate (₹)</label>
+                      <label style={{ fontSize: '0.8rem'}}>Base Rate (₹)</label>
                       <input
                         type="number"
                         step="0.01"

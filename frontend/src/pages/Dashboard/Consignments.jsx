@@ -124,47 +124,77 @@ function Consignments() {
     loadData();
   }, []);
 
-  // Fetch rate card
+  // Fetch rate card — requires user_id + delivery_partner + service_type + mode + region/zone
   const fetchRateCard = useCallback(async (consignmentData) => {
-    if (!consignmentData.delivery_partner || !consignmentData.service_type || !consignmentData.mode) {
+    console.log('[RateCard] fetchRateCard called with:', {
+      user_id: consignmentData.user_id,
+      delivery_partner: consignmentData.delivery_partner,
+      service_type: consignmentData.service_type,
+      mode: consignmentData.mode,
+      region: consignmentData.region,
+      courier_zone: consignmentData.courier_zone,
+    });
+
+    // Need user selected AND the shipping criteria filled
+    if (!consignmentData.user_id) {
+      setRateCardError('Please select a user first to load their rate card.');
       return;
     }
+    if (!consignmentData.delivery_partner || !consignmentData.service_type || !consignmentData.mode) {
+      return; // silently wait — not all fields filled yet
+    }
+    // For cargo, region is required; for courier, zone is required; 'other' needs neither
+    if (consignmentData.service_type === 'cargo' && !consignmentData.region) return;
+    if (consignmentData.service_type === 'courier' && !consignmentData.courier_zone) return;
 
     setRateCardLoading(true);
     setRateCardError('');
+    setRateCardFetched(false);
     try {
+      // Build params — backend /rate-cards/fetch requires user_id
       const params = {
+        user_id: consignmentData.user_id,
         delivery_partner: consignmentData.delivery_partner,
         service_type: consignmentData.service_type,
         mode: consignmentData.mode,
       };
-
-      if (consignmentData.service_type === 'cargo' && consignmentData.region) {
+      // Backend expects 'region' for cargo, 'zone' for courier (NOT courier_zone)
+      if (consignmentData.service_type === 'cargo') {
         params.region = consignmentData.region;
       }
-      if (consignmentData.service_type === 'courier' && consignmentData.courier_zone) {
-        params.courier_zone = consignmentData.courier_zone;
+      if (consignmentData.service_type === 'courier') {
+        params.zone = consignmentData.courier_zone;
       }
 
+      console.log('[RateCard] Fetching with params:', params);
       const response = await rateCardsAPI.fetch(params);
-      const rateCard = response.data;
+      const result = response.data;
+      console.log('[RateCard] Response:', result);
 
-      if (rateCard) {
+      if (result && result.found && result.rate_card) {
+        const rc = result.rate_card;
+        console.log('[RateCard] Applying rate card fields:', rc);
         setFormData(prev => ({
           ...prev,
-          base_rate: rateCard.base_rate || 0,
-          docket_charges: rateCard.docket_charges || 0,
-          oda_charge: rateCard.oda_charge || 0,
-          fov: rateCard.fov || 0,
-          fuel_charge: rateCard.fuel_charge || 0,
-          gst: rateCard.gst || 0,
-          rate_card_id: rateCard._id || rateCard.id || '',
+          base_rate: rc.base_rate || 0,
+          docket_charges: rc.docket_charge || 0,   // backend field is docket_charge
+          oda_charge: rc.odi || 0,                  // backend field is odi
+          fov: rc.fov || 0,
+          fuel_charge: rc.fuel_charge || 0,
+          gst: rc.gst || 0,
+          rate_card_id: rc._id || rc.id || '',
         }));
         setRateCardFetched(true);
+        setRateCardError('');
+      } else {
+        // Rate card not found for this user/criteria
+        console.warn('[RateCard] Not found:', result?.message);
+        setRateCardError(result?.message || 'No rate card found for this user with the selected criteria.');
+        setRateCardFetched(false);
       }
     } catch (err) {
-      console.error('Failed to fetch rate card:', err);
-      setRateCardError('Failed to fetch rate card. Please try again.');
+      console.error('[RateCard] Fetch error:', err.response?.data || err.message);
+      setRateCardError(err.response?.data?.detail || 'Failed to fetch rate card. Please try again.');
       setRateCardFetched(false);
     } finally {
       setRateCardLoading(false);
@@ -175,6 +205,7 @@ function Consignments() {
   const validateForm = useCallback(() => {
     const errors = {};
     if (!formData.date) errors.date = 'Date is required';
+    if (!formData.user_id) errors.user_id = 'Please select a user';
     if (!formData.name) errors.name = 'Name is required';
     if (!formData.destination) errors.destination = 'Destination is required';
     if (!formData.weight || formData.weight <= 0) errors.weight = 'Weight must be greater than 0';
@@ -658,10 +689,39 @@ function FormModal({
     }));
   };
 
-  const handleRateCardFieldChange = (field, value) => {
-    const updated = { ...consignment, [field]: value };
+  // When user is selected: auto-fill name, clear old rate card, re-fetch
+  const handleUserChange = (userId) => {
+    const selectedUser = users.find(u => (u._id || u.id) === userId);
+    const updated = {
+      ...consignment,
+      user_id: userId,
+      name: selectedUser ? (selectedUser.full_name || selectedUser.email || '') : consignment.name,
+      // Reset pricing when user changes — their rate card may differ
+      base_rate: 0,
+      docket_charges: 0,
+      oda_charge: 0,
+      fov: 0,
+      fuel_charge: 0,
+      gst: 0,
+      rate_card_id: '',
+    };
     setConsignment(updated);
-    if (field === 'delivery_partner' || field === 'service_type' || field === 'mode' || field === 'region' || field === 'courier_zone') {
+    // Trigger rate card fetch if shipping criteria already filled
+    if (updated.delivery_partner && updated.service_type && updated.mode) {
+      fetchRateCard(updated);
+    }
+  };
+
+  const handleRateCardFieldChange = (field, value) => {
+    // Build the updated object atomically — clear region/zone when service_type changes
+    let updated = { ...consignment, [field]: value };
+    if (field === 'service_type') {
+      updated.region = '';
+      updated.courier_zone = '';
+    }
+    setConsignment(updated);
+    // Trigger fetch whenever any rate card criteria changes
+    if (['delivery_partner', 'service_type', 'mode', 'region', 'courier_zone'].includes(field)) {
       fetchRateCard(updated);
     }
   };
@@ -702,19 +762,29 @@ function FormModal({
                 {formErrors.name && <span className="error-text">{formErrors.name}</span>}
               </div>
               <div className="form-group">
-                <label>User</label>
+                <label>User *</label>
                 <select
                   value={consignment.user_id}
-                  onChange={(e) => handleFieldChange('user_id', e.target.value)}
+                  onChange={(e) => handleUserChange(e.target.value)}
                   style={{ color: '#000000' }}
+                  required
                 >
-                  <option value="">Select User (Optional)</option>
-                  {users.map((user) => (
-                    <option key={user._id || user.id} value={user._id || user.id}>
-                      {user.full_name || user.email}
-                    </option>
-                  ))}
+                  <option value="">— Select User —</option>
+                  {users
+                    .filter(u => !['master_admin', 'child_admin'].includes(u.role))
+                    .map((user) => (
+                      <option key={user._id || user.id} value={user._id || user.id}>
+                        {user.full_name || user.email}
+                        {user.company_name ? ` (${user.company_name})` : ''}
+                      </option>
+                    ))}
                 </select>
+                {!consignment.user_id && !formErrors.user_id && (
+                  <span style={{ fontSize: '0.78rem', color: '#9ca3af', marginTop: '2px', display: 'block' }}>
+                    Select a user to auto-load their rate card
+                  </span>
+                )}
+                {formErrors.user_id && <span className="error-text">{formErrors.user_id}</span>}
               </div>
             </div>
 
@@ -851,11 +921,7 @@ function FormModal({
                 <label>Service Type *</label>
                 <select
                   value={consignment.service_type}
-                  onChange={(e) => {
-                    handleFieldChange('region', '');
-                    handleFieldChange('courier_zone', '');
-                    handleRateCardFieldChange('service_type', e.target.value);
-                  }}
+                  onChange={(e) => handleRateCardFieldChange('service_type', e.target.value)}
                   required
                   style={{ color: '#000000' }}
                 >
@@ -930,18 +996,24 @@ function FormModal({
 
             {/* Rate Card Status */}
             {rateCardLoading && (
-              <div className="alert" style={{ background: '#f0f9ff', border: '1px solid #bae6fd', color: '#0369a1', marginTop: '1rem' }}>
-                Loading rate card...
+              <div className="alert" style={{ background: '#f0f9ff', border: '1px solid #bae6fd', color: '#0369a1', marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span style={{ animation: 'spin 1s linear infinite', display: 'inline-block' }}>⟳</span>
+                Fetching rate card for this user...
               </div>
             )}
-            {rateCardError && (
+            {!rateCardLoading && rateCardError && (
               <div className="alert alert-error" style={{ marginTop: '1rem' }}>
-                {rateCardError}
+                ⚠️ {rateCardError}
               </div>
             )}
-            {rateCardFetched && !rateCardError && (
+            {!rateCardLoading && rateCardFetched && !rateCardError && (
               <div className="alert" style={{ background: '#f0fdf4', border: '1px solid #86efac', color: '#166534', marginTop: '1rem' }}>
-                ✓ Rate card applied successfully
+                ✓ Rate card loaded — pricing fields auto-filled below
+              </div>
+            )}
+            {!rateCardLoading && !rateCardFetched && !rateCardError && consignment.user_id && consignment.delivery_partner && consignment.service_type && consignment.mode && (
+              <div className="alert" style={{ background: '#fffbeb', border: '1px solid #fcd34d', color: '#92400e', marginTop: '1rem' }}>
+                ⚠️ No rate card found for this user with the selected criteria. You can enter pricing manually below.
               </div>
             )}
 
