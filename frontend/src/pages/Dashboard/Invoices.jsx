@@ -20,23 +20,19 @@ const fmtDate = (d) => {
 };
 
 const STATUS_META = {
-  paid:      { label: 'Paid',     color: '#16a34a', bg: '#f0fdf4', icon: CheckCircle },
-  partial:   { label: 'Partial',  color: '#d97706', bg: '#fffbeb', icon: Clock },
-  pending:   { label: 'Pending',  color: '#dc2626', bg: '#fef2f2', icon: AlertCircle },
-  overdue:   { label: 'Overdue',  color: '#dc2626', bg: '#fef2f2', icon: AlertCircle },
-  cancelled: { label: 'Cancelled',color: '#6b7280', bg: '#f9fafb', icon: X },
+  paid:      { label: 'Paid',     icon: CheckCircle },
+  partial:   { label: 'Partial',  icon: Clock },
+  pending:   { label: 'Pending',  icon: AlertCircle },
+  overdue:   { label: 'Overdue',  icon: AlertCircle },
+  cancelled: { label: 'Cancelled',icon: X },
 };
 
 function StatusBadge({ status }) {
   const m = STATUS_META[status] || STATUS_META.pending;
   const Icon = m.icon;
   return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: '4px',
-      padding: '3px 10px', borderRadius: '20px', fontSize: '0.78rem',
-      fontWeight: 600, background: m.bg, color: m.color, border: `1px solid ${m.color}33`
-    }}>
-      <Icon size={12} /> {m.label}
+    <span className={`status-badge status-${status}`}>
+      <Icon size={14} /> {m.label}
     </span>
   );
 }
@@ -179,27 +175,17 @@ export default function InvoicesPage() {
       </div>
 
       {/* Filter Tabs */}
-      <div className="filter-tabs" style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+      <div className="filter-tabs">
         {['all', 'pending', 'partial', 'paid', 'overdue'].map(s => (
           <button
             key={s}
             onClick={() => setFilterStatus(s)}
-            style={{
-              padding: '0.35rem 1rem',
-              borderRadius: '20px',
-              border: `1px solid ${filterStatus === s ? '#6366f1' : '#e2e8f0'}`,
-              background: filterStatus === s ? '#6366f1' : 'transparent',
-              color: filterStatus === s ? '#fff' : '#64748b',
-              fontWeight: filterStatus === s ? 600 : 400,
-              cursor: 'pointer',
-              fontSize: '0.85rem',
-              transition: 'all 0.15s',
-            }}
+            className={`filter-tab ${filterStatus === s ? 'active' : ''}`}
           >
             {s.charAt(0).toUpperCase() + s.slice(1)}
             {s !== 'all' && (
-              <span style={{ marginLeft: '6px', opacity: 0.8 }}>
-                ({invoices.filter(i => i.payment_status === s).length})
+              <span className="filter-count">
+                {invoices.filter(i => i.payment_status === s).length}
               </span>
             )}
           </button>
@@ -261,42 +247,39 @@ export default function InvoicesPage() {
                     <td><StatusBadge status={inv.payment_status} /></td>
                     <td className="actions-cell" onClick={e => e.stopPropagation()}>
                       <button
-                        className="action-btn"
+                        className="action-btn view-details"
                         title="View Details"
                         onClick={() => openDetail(inv)}
                       >
-                        <Eye size={16} />
+                        <Eye size={18} />
                       </button>
                       <button
-                        className="action-btn"
+                        className="action-btn download-pdf"
                         title="Download PDF"
                         disabled={downloadingId === `${inv._id}-pdf`}
                         onClick={() => handleDownload(inv, 'pdf')}
-                        style={{ color: '#ef4444' }}
                       >
                         {downloadingId === `${inv._id}-pdf`
-                          ? <RefreshCw size={16} className="spin" />
-                          : <Download size={16} />}
+                          ? <RefreshCw size={18} className="spin" />
+                          : <Download size={18} />}
                       </button>
                       <button
-                        className="action-btn"
+                        className="action-btn download-excel"
                         title="Download Excel"
                         disabled={downloadingId === `${inv._id}-excel`}
                         onClick={() => handleDownload(inv, 'excel')}
-                        style={{ color: '#16a34a' }}
                       >
                         {downloadingId === `${inv._id}-excel`
-                          ? <RefreshCw size={16} className="spin" />
-                          : <FileSpreadsheet size={16} />}
+                          ? <RefreshCw size={18} className="spin" />
+                          : <FileSpreadsheet size={18} />}
                       </button>
                       {isAdmin() && inv.payment_status !== 'paid' && (
                         <button
                           className="action-btn"
                           title="Record Payment"
                           onClick={() => { setSelectedInvoice(inv); setShowPayment(true); }}
-                          style={{ color: '#6366f1' }}
                         >
-                          <DollarSign size={16} />
+                          <DollarSign size={18} />
                         </button>
                       )}
                     </td>
@@ -334,6 +317,8 @@ export default function InvoicesPage() {
 
 // ─── Invoice Detail Modal ────────────────────────────────────────────────────
 
+// ─── Invoice Detail Modal ────────────────────────────────────────────────────
+
 function InvoiceDetailModal({ invoice, onClose, onDownload, onPayment, downloadingId, isAdmin }) {
   const [showPayments, setShowPayments] = useState(false);
 
@@ -342,104 +327,134 @@ function InvoiceDetailModal({ invoice, onClose, onDownload, onPayment, downloadi
       <div
         className="modal modal-large"
         onClick={e => e.stopPropagation()}
-        style={{ maxWidth: '780px', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}
       >
         {/* Header */}
-        <div className="modal-header" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: '#fff', borderRadius: '12px 12px 0 0' }}>
+        <div className="modal-header">
           <div>
-            <h2 style={{ color: '#fff', margin: 0 }}>{invoice.invoice_number}</h2>
-            <p style={{ margin: '2px 0 0', opacity: 0.85, fontSize: '0.85rem' }}>
-              {fmtDate(invoice.created_at)}
+            <h2>{invoice.invoice_number}</h2>
+            <p style={{ margin: '2px 0 0', opacity: 0.7, fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+              Created: {fmtDate(invoice.created_at)}
             </p>
           </div>
-          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
             <StatusBadge status={invoice.payment_status} />
             <button
               className="btn-close"
               onClick={onClose}
-              style={{ color: '#fff', background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: '8px', padding: '6px', cursor: 'pointer' }}
+              title="Close"
             >
               <X size={20} />
             </button>
           </div>
         </div>
 
-        <div className="modal-body" style={{ overflowY: 'auto', flex: 1 }}>
+        <div className="modal-body">
           {/* Customer + Totals */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
+          <div className="detail-grid">
             <div>
-              <p style={{ fontSize: '0.75rem', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>Bill To</p>
-              <p style={{ fontWeight: 700, fontSize: '1.05rem', margin: '0 0 4px' }}>{invoice.customer_name}</p>
-              {invoice.customer_email && <p style={{ color: '#6b7280', margin: '0 0 2px', fontSize: '0.9rem' }}>{invoice.customer_email}</p>}
-              {invoice.billing_address && <p style={{ color: '#6b7280', margin: 0, fontSize: '0.85rem' }}>{invoice.billing_address}</p>}
+              <div className="detail-section">
+                <h4>Bill To</h4>
+                <div className="detail-value">{invoice.customer_name}</div>
+                {invoice.customer_email && (
+                  <div style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '4px' }}>
+                    {invoice.customer_email}
+                  </div>
+                )}
+                {invoice.billing_address && (
+                  <div style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '2px' }}>
+                    {invoice.billing_address}
+                  </div>
+                )}
+              </div>
             </div>
-            <div style={{ background: '#f8fafc', borderRadius: '10px', padding: '1rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                <span style={{ color: '#6b7280', fontSize: '0.9rem' }}>Subtotal</span>
+            
+            <div className="detail-card">
+              <div className="summary-row">
+                <span>Subtotal</span>
                 <span>{fmt(invoice.subtotal)}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                <span style={{ color: '#6b7280', fontSize: '0.9rem' }}>GST</span>
+              <div className="summary-row">
+                <span>GST</span>
                 <span>{fmt(invoice.gst_amount)}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #e2e8f0', paddingTop: '8px', marginTop: '4px', fontWeight: 700, fontSize: '1.05rem' }}>
+              <div className="summary-row total">
                 <span>Total</span>
-                <span style={{ color: '#6366f1' }}>{fmt(invoice.total_amount)}</span>
+                <span style={{ color: 'var(--accent-premium)' }}>{fmt(invoice.total_amount)}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px' }}>
-                <span style={{ color: '#16a34a', fontSize: '0.9rem' }}>Paid</span>
-                <span style={{ color: '#16a34a', fontWeight: 600 }}>{fmt(invoice.amount_paid)}</span>
+              <div className="summary-row paid-full" style={{ marginTop: '0.75rem' }}>
+                <span>Paid</span>
+                <span>{fmt(invoice.amount_paid)}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px', background: invoice.balance_due > 0 ? '#fef2f2' : '#f0fdf4', borderRadius: '6px', padding: '6px 8px' }}>
-                <span style={{ color: invoice.balance_due > 0 ? '#dc2626' : '#16a34a', fontWeight: 700 }}>Balance Due</span>
-                <span style={{ color: invoice.balance_due > 0 ? '#dc2626' : '#16a34a', fontWeight: 700 }}>{fmt(invoice.balance_due)}</span>
+              
+              <div className={`summary-row ${invoice.balance_due > 0 ? 'balance' : 'paid-full'}`} style={{ marginTop: '0.5rem' }}>
+                <span>Balance Due</span>
+                <span>{fmt(invoice.balance_due)}</span>
               </div>
             </div>
           </div>
 
           {/* Line Items */}
-          <h3 style={{ fontSize: '0.9rem', fontWeight: 700, color: '#374151', marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <h4 style={{ 
+            fontSize: '0.85rem', fontWeight: 700, 
+            textTransform: 'uppercase', letterSpacing: '0.05em', 
+            color: 'var(--text-secondary)', marginBottom: '1rem' 
+          }}>
             Line Items ({invoice.items?.length || 0})
-          </h3>
-          {invoice.items?.length > 0 ? (
-            <table className="data-table" style={{ fontSize: '0.88rem', marginBottom: '1.5rem' }}>
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Description</th>
-                  <th>Tracking</th>
-                  <th>Weight</th>
-                  <th style={{ textAlign: 'right' }}>Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {invoice.items.map((item, i) => (
-                  <tr key={i}>
-                    <td>{i + 1}</td>
-                    <td>{item.description}</td>
-                    <td><code style={{ fontSize: '0.8rem', background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px' }}>{item.tracking_number || '—'}</code></td>
-                    <td>{item.weight_kg ? `${item.weight_kg} kg` : '—'}</td>
-                    <td style={{ textAlign: 'right', fontWeight: 600 }}>{fmt(item.amount)}</td>
+          </h4>
+          
+          <div style={{ overflowX: 'auto', marginBottom: '2rem' }}>
+            {invoice.items?.length > 0 ? (
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Description</th>
+                    <th>Tracking</th>
+                    <th>Weight</th>
+                    <th style={{ textAlign: 'right' }}>Amount</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <p style={{ color: '#9ca3af', marginBottom: '1.5rem' }}>No line items.</p>
-          )}
+                </thead>
+                <tbody>
+                  {invoice.items.map((item, i) => (
+                    <tr key={i}>
+                      <td style={{ color: 'var(--text-secondary)' }}>{i + 1}</td>
+                      <td style={{ fontWeight: 500 }}>{item.description}</td>
+                      <td>
+                        <span style={{ fontSize: '0.8rem', background: 'var(--bg-page)', padding: '2px 8px', borderRadius: '4px', border: '1px solid var(--border-subtle)' }}>
+                          {item.tracking_number || '—'}
+                        </span>
+                      </td>
+                      <td>{item.weight_kg ? `${item.weight_kg} kg` : '—'}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 600 }}>{fmt(item.amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div className="empty-state" style={{ padding: '2rem 1rem' }}>
+                <p>No line items found.</p>
+              </div>
+            )}
+          </div>
 
           {/* Payment History */}
           {invoice.payments?.length > 0 && (
-            <>
+            <div style={{ marginBottom: '1rem' }}>
               <button
                 onClick={() => setShowPayments(!showPayments)}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, color: '#374151', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.75rem', padding: 0 }}
+                style={{ 
+                  display: 'flex', alignItems: 'center', gap: '6px', 
+                  background: 'none', border: 'none', cursor: 'pointer', 
+                  fontWeight: 600, color: 'var(--accent-premium)', 
+                  fontSize: '0.9rem', marginBottom: '1rem', padding: 0 
+                }}
               >
                 {showPayments ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                 Payment History ({invoice.payments.length})
               </button>
+              
               {showPayments && (
-                <table className="data-table" style={{ fontSize: '0.88rem', marginBottom: '1.5rem' }}>
+                <table className="data-table" style={{ fontSize: '0.85rem' }}>
                   <thead>
                     <tr>
                       <th>Date</th>
@@ -453,50 +468,51 @@ function InvoiceDetailModal({ invoice, onClose, onDownload, onPayment, downloadi
                       <tr key={i}>
                         <td>{fmtDate(p.payment_date)}</td>
                         <td style={{ textTransform: 'capitalize' }}>{String(p.method || '').replace('_', ' ')}</td>
-                        <td>{p.transaction_ref || '—'}</td>
+                        <td style={{ color: 'var(--text-secondary)' }}>{p.transaction_ref || '—'}</td>
                         <td style={{ textAlign: 'right', color: '#16a34a', fontWeight: 600 }}>{fmt(p.amount)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               )}
-            </>
+            </div>
           )}
 
           {invoice.notes && (
-            <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: '8px', padding: '0.75rem 1rem', fontSize: '0.88rem', color: '#92400e' }}>
+            <div style={{ background: 'rgba(234, 179, 8, 0.1)', border: '1px solid rgba(234, 179, 8, 0.2)', borderRadius: '12px', padding: '1rem', fontSize: '0.9rem', color: '#ca8a04' }}>
               <strong>Notes:</strong> {invoice.notes}
             </div>
           )}
         </div>
 
         {/* Footer Actions */}
-        <div className="modal-footer" style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+        <div className="modal-footer">
           {isAdmin && invoice.payment_status !== 'paid' && (
-            <button className="btn btn-primary" onClick={onPayment} style={{ background: '#6366f1' }}>
+            <button className="btn btn-primary" onClick={onPayment}>
               <DollarSign size={16} /> Record Payment
             </button>
           )}
+          
           <button
             className="btn btn-secondary"
             onClick={() => onDownload(invoice, 'excel')}
             disabled={downloadingId === `${invoice._id}-excel`}
-            style={{ color: '#16a34a', borderColor: '#16a34a' }}
           >
             {downloadingId === `${invoice._id}-excel`
-              ? <><RefreshCw size={16} className="spin" /> Downloading…</>
+              ? <><RefreshCw size={16} className="spin" /></>
               : <><FileSpreadsheet size={16} /> Excel</>}
           </button>
+          
           <button
             className="btn btn-secondary"
             onClick={() => onDownload(invoice, 'pdf')}
             disabled={downloadingId === `${invoice._id}-pdf`}
-            style={{ color: '#ef4444', borderColor: '#ef4444' }}
           >
             {downloadingId === `${invoice._id}-pdf`
-              ? <><RefreshCw size={16} className="spin" /> Downloading…</>
-              : <><Download size={16} /> Download PDF</>}
+              ? <><RefreshCw size={16} className="spin" /> </>
+              : <><Download size={16} /> PDF</>}
           </button>
+          
           <button className="btn btn-secondary" onClick={onClose}>Close</button>
         </div>
       </div>
@@ -539,22 +555,22 @@ function PaymentModal({ invoice, onClose, onSuccess }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px' }}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h2>Record Payment</h2>
           <button className="btn-close" onClick={onClose}><X size={20} /></button>
         </div>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
           <div className="modal-body">
             {error && <div className="alert alert-error">{error}</div>}
 
-            <div style={{ background: '#f8fafc', borderRadius: '8px', padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.9rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#6b7280' }}>Invoice</span>
-                <strong>{invoice.invoice_number}</strong>
+            <div style={{ background: 'var(--bg-page)', borderRadius: '12px', padding: '1rem', marginBottom: '1.5rem', border: '1px solid var(--border-subtle)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Invoice</span>
+                <strong style={{ color: 'var(--text-main)' }}>{invoice.invoice_number}</strong>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
-                <span style={{ color: '#6b7280' }}>Balance Due</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Balance Due</span>
                 <strong style={{ color: '#dc2626' }}>{fmt(invoice.balance_due)}</strong>
               </div>
             </div>
@@ -562,7 +578,7 @@ function PaymentModal({ invoice, onClose, onSuccess }) {
             <div className="form-group">
               <label>Amount (₹) *</label>
               <input
-                type="number" step="0.01" min="0.01" max={invoice.balance_due}
+                type="number" step="0.01" min="0.01" max={invoice.balance_due + 1}
                 value={form.amount}
                 onChange={e => setForm({ ...form, amount: e.target.value })}
                 required
@@ -603,7 +619,13 @@ function PaymentModal({ invoice, onClose, onSuccess }) {
           <div className="modal-footer">
             <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
             <button type="submit" className="btn btn-primary" disabled={loading}>
-              {loading ? 'Recording…' : 'Record Payment'}
+              {loading ? (
+                <>
+                  <RefreshCw size={18} className="spin" /> Processing…
+                </>
+              ) : (
+                'Record Payment'
+              )}
             </button>
           </div>
         </form>

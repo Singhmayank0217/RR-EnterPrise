@@ -384,12 +384,12 @@ function UserDetailsModal({ user, onClose }) {
                     <tbody>
                       {consignments.map((c) => (
                         <tr key={c._id}>
-                          <td>{formatDate(c.date)}</td>
-                          <td><strong>{c.consignment_no}</strong></td>
-                          <td>{c.destination}</td>
-                          <td>{c.product_name}</td>
-                          <td>{c.weight} kg</td>
-                          <td>{formatCurrency(c.total)}</td>
+                          <td style={{ color: '#d5dbe2ff' }}>{formatDate(c.date)}</td>
+                          <td style={{ color: '#d5dbe2ff' }}><strong>{c.consignment_no}</strong></td>
+                          <td style={{ color: '#d5dbe2ff' }}>{c.destination}</td>
+                          <td style={{ color: '#d5dbe2ff' }}>{c.product_name}</td>
+                          <td style={{ color: '#d5dbe2ff' }}>{c.weight} kg</td>
+                          <td style={{ color: '#d5dbe2ff' }}>{formatCurrency(c.total)}</td>
                           <td>
                             {c.invoice_no ? (
                               <span style={{ 
@@ -435,13 +435,13 @@ function UserDetailsModal({ user, onClose }) {
                     <tbody>
                       {invoices.map((inv) => (
                         <tr key={inv._id}>
-                          <td><strong>{inv.invoice_number}</strong></td>
-                          <td>{formatDate(inv.created_at)}</td>
-                          <td>{formatCurrency(inv.subtotal)}</td>
-                          <td>{formatCurrency(inv.gst_amount)}</td>
-                          <td>{formatCurrency(inv.total_amount)}</td>
-                          <td>{formatCurrency(inv.amount_paid)}</td>
-                          <td>{formatCurrency(inv.balance_due)}</td>
+                          <td style={{ color: '#d5dbe2ff' }}><strong>{inv.invoice_number}</strong></td>
+                          <td style={{ color: '#d5dbe2ff' }}>{formatDate(inv.created_at)}</td>
+                          <td style={{ color: '#d5dbe2ff' }}>{formatCurrency(inv.subtotal)}</td>
+                          <td style={{ color: '#d5dbe2ff' }}>{formatCurrency(inv.gst_amount)}</td>
+                          <td style={{ color: '#d5dbe2ff' }}>{formatCurrency(inv.total_amount)}</td>
+                          <td style={{ color: '#d5dbe2ff' }}>{formatCurrency(inv.amount_paid)}</td>
+                          <td style={{ color: '#d5dbe2ff' }}>{formatCurrency(inv.balance_due)}</td>
                           <td>
                             <span className={`status-badge ${
                               inv.payment_status === 'paid' ? 'status-delivered' : 
@@ -483,14 +483,14 @@ function UserDetailsModal({ user, onClose }) {
                     <tbody>
                       {rateCards.map((rc) => (
                         <tr key={rc._id}>
-                          <td><strong>{rc.delivery_partner}</strong></td>
-                          <td>{rc.service_type}</td>
+                          <td style={{ color: '#d5dbe2ff' }}><strong>{rc.delivery_partner}</strong></td>
+                          <td style={{ color: '#d5dbe2ff' }}>{rc.service_type}</td>
                           <td>{rc.mode}</td>
-                          <td>{rc.region || rc.zone || '-'}</td>
-                          <td>{formatCurrency(rc.base_rate)}</td>
-                          <td>{formatCurrency(rc.docket_charge)}</td>
-                          <td>{rc.fov}</td>
-                          <td>{rc.gst}%</td>
+                          <td style={{ color: '#d5dbe2ff' }}>{rc.region || rc.zone || '-'}</td>
+                          <td style={{ color: '#d5dbe2ff' }}>{formatCurrency(rc.base_rate)}</td>
+                          <td style={{ color: '#d5dbe2ff' }}>{formatCurrency(rc.docket_charge)}</td>
+                          <td style={{ color: '#d5dbe2ff' }}>{rc.fov}</td>
+                          <td style={{ color: '#d5dbe2ff' }}>{rc.gst}%</td>
                           <td>
                             <span className={`status-badge ${rc.is_active ? 'status-delivered' : 'status-cancelled'}`}>
                               {rc.is_active ? 'Active' : 'Inactive'}

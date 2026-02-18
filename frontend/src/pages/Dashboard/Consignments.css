@@ -264,6 +264,7 @@
   justify-content: center;
   border-radius: 10px;
   transition: var(--transition);
+  background-color: rgb(23, 22, 22) !important;
 }
 
 .btn-close:hover {
