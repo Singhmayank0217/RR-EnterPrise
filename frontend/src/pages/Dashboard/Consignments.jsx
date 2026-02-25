@@ -45,6 +45,7 @@ const COURIER_ZONES = [
 const getEmptyConsignment = () => ({
   date: new Date().toISOString().split('T')[0],
   name: '',
+  docket_no: '',
   user_id: '',
   destination: '',
   destination_city: '',
@@ -138,14 +139,25 @@ function Consignments() {
     // Need user selected AND the shipping criteria filled
     if (!consignmentData.user_id) {
       setRateCardError('Please select a user first to load their rate card.');
+      setRateCardFetched(false);
       return;
     }
     if (!consignmentData.delivery_partner || !consignmentData.service_type || !consignmentData.mode) {
+      setRateCardError('');
+      setRateCardFetched(false);
       return; // silently wait — not all fields filled yet
     }
     // For cargo, region is required; for courier, zone is required; 'other' needs neither
-    if (consignmentData.service_type === 'cargo' && !consignmentData.region) return;
-    if (consignmentData.service_type === 'courier' && !consignmentData.courier_zone) return;
+    if (consignmentData.service_type === 'cargo' && !consignmentData.region) {
+      setRateCardError('');
+      setRateCardFetched(false);
+      return;
+    }
+    if (consignmentData.service_type === 'courier' && !consignmentData.courier_zone) {
+      setRateCardError('');
+      setRateCardFetched(false);
+      return;
+    }
 
     setRateCardLoading(true);
     setRateCardError('');
@@ -424,6 +436,15 @@ function Consignments() {
     { field: 'sr_no', headerName: 'SR NO', width: 80, sortable: true, filter: true, pinned: 'left' },
     { field: 'date', headerName: 'DATE', width: 120, sortable: true, filter: 'agDateColumnFilter', editable: (params) => editingRowIds.includes(params.data._id || params.data.id) },
     { field: 'consignment_no', headerName: 'CONSIGNMENT NO', width: 160, sortable: true, filter: true },
+    {
+      field: 'docket_no',
+      headerName: 'DOCKET NO',
+      width: 150,
+      sortable: true,
+      filter: true,
+      editable: (params) => editingRowIds.includes(params.data._id || params.data.id),
+      valueGetter: (params) => params.data?.docket_no || params.data?.docketNo || params.data?.consignment_no || '—'
+    },
     { field: 'name', headerName: 'NAME', width: 180, sortable: true, filter: true, editable: (params) => editingRowIds.includes(params.data._id || params.data.id) },
     { field: 'destination', headerName: 'DESTINATION', width: 150, sortable: true, filter: true },
     { field: 'pieces', headerName: 'PC', width: 80, sortable: true, editable: (params) => editingRowIds.includes(params.data._id || params.data.id) },
@@ -737,6 +758,362 @@ function FormModal({
         </div>
         <form onSubmit={onSubmit}>
           <div className="modal-body">
+            {!isEditMode && (
+              <>
+                <h3 className="section-title">Add Consignment (Excel Sheet Style)</h3>
+                <div className="excel-sheet-wrapper">
+                  <table className="excel-sheet-table">
+                    <thead>
+                      <tr>
+                        <th>Date *</th>
+                        <th>Docket No</th>
+                        <th>User *</th>
+                        <th>Name *</th>
+                        <th>Destination *</th>
+                        <th>City</th>
+                        <th>State</th>
+                        <th>Pincode</th>
+                        <th>Product *</th>
+                        <th>Pieces</th>
+                        <th>Weight (kg) *</th>
+                        <th>Declared Value</th>
+                        <th>Invoice</th>
+                        <th>Partner *</th>
+                        <th>Service *</th>
+                        <th>Mode *</th>
+                        <th>Region</th>
+                        <th>Courier Zone</th>
+                        <th>Legacy Zone</th>
+                        <th>Base Rate</th>
+                        <th>Docket Charges</th>
+                        <th>ODA</th>
+                        <th>FOV</th>
+                        <th>Fuel %</th>
+                        <th>GST %</th>
+                        <th>Total</th>
+                        <th>Box 1</th>
+                        <th>Box 2</th>
+                        <th>Box 3</th>
+                        <th>Remarks</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>
+                          <input
+                            type="date"
+                            value={consignment.date}
+                            onChange={(e) => handleFieldChange('date', e.target.value)}
+                            required
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            value={consignment.docket_no || ''}
+                            onChange={(e) => handleFieldChange('docket_no', e.target.value)}
+                            placeholder="Docket No"
+                          />
+                        </td>
+                        <td>
+                          <select
+                            value={consignment.user_id}
+                            onChange={(e) => handleUserChange(e.target.value)}
+                            required
+                          >
+                            <option value="">Select User</option>
+                            {users
+                              .filter(u => !['master_admin', 'child_admin'].includes(u.role))
+                              .map((user) => (
+                                <option key={user._id || user.id} value={user._id || user.id}>
+                                  {user.full_name || user.email}
+                                </option>
+                              ))}
+                          </select>
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            value={consignment.name}
+                            onChange={(e) => handleFieldChange('name', e.target.value)}
+                            placeholder="Customer/Sender"
+                            required
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            value={consignment.destination}
+                            onChange={(e) => handleFieldChange('destination', e.target.value)}
+                            placeholder="Destination"
+                            required
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            value={consignment.destination_city}
+                            onChange={(e) => handleFieldChange('destination_city', e.target.value)}
+                            placeholder="City"
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            value={consignment.destination_state}
+                            onChange={(e) => handleFieldChange('destination_state', e.target.value)}
+                            placeholder="State"
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            value={consignment.destination_pincode}
+                            onChange={(e) => handleFieldChange('destination_pincode', e.target.value)}
+                            placeholder="Pincode"
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            value={consignment.product_name}
+                            onChange={(e) => handleFieldChange('product_name', e.target.value)}
+                            placeholder="Product"
+                            required
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            min="1"
+                            value={consignment.pieces}
+                            onChange={(e) => handleFieldChange('pieces', parseInt(e.target.value, 10) || 1)}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={consignment.weight}
+                            onChange={(e) => handleFieldChange('weight', parseFloat(e.target.value) || 0)}
+                            required
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={consignment.value}
+                            onChange={(e) => handleFieldChange('value', parseFloat(e.target.value) || 0)}
+                          />
+                        </td>
+                        <td>
+                          <select
+                            value={consignment.invoice_id}
+                            onChange={(e) => {
+                              const selectedInvoice = invoices.find(i => (i._id || i.id) === e.target.value);
+                              handleFieldChange('invoice_id', e.target.value);
+                              handleFieldChange('invoice_no', selectedInvoice?.invoice_number || '');
+                            }}
+                          >
+                            <option value="">Optional</option>
+                            {invoices.map((invoice) => (
+                              <option key={invoice._id || invoice.id} value={invoice._id || invoice.id}>
+                                {invoice.invoice_number}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td>
+                          <select
+                            value={consignment.delivery_partner}
+                            onChange={(e) => handleRateCardFieldChange('delivery_partner', e.target.value)}
+                            required
+                          >
+                            <option value="">Partner</option>
+                            {DELIVERY_PARTNERS.map((p) => (
+                              <option key={p} value={p}>{p}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td>
+                          <select
+                            value={consignment.service_type}
+                            onChange={(e) => handleRateCardFieldChange('service_type', e.target.value)}
+                            required
+                          >
+                            <option value="">Service</option>
+                            {SERVICE_TYPES.map((s) => (
+                              <option key={s.value} value={s.value}>{s.label}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td>
+                          <select
+                            value={consignment.mode}
+                            onChange={(e) => handleRateCardFieldChange('mode', e.target.value)}
+                            required
+                          >
+                            <option value="">Mode</option>
+                            {TRANSPORT_MODES.map((m) => (
+                              <option key={m.value} value={m.value}>{m.label}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td>
+                          <select
+                            value={consignment.region}
+                            onChange={(e) => handleRateCardFieldChange('region', e.target.value)}
+                            disabled={consignment.service_type !== 'cargo'}
+                          >
+                            <option value="">Region</option>
+                            {CARGO_REGIONS.map((r) => (
+                              <option key={r.value} value={r.value}>{r.label}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td>
+                          <select
+                            value={consignment.courier_zone}
+                            onChange={(e) => handleRateCardFieldChange('courier_zone', e.target.value)}
+                            disabled={consignment.service_type !== 'courier'}
+                          >
+                            <option value="">Zone</option>
+                            {COURIER_ZONES.map((z) => (
+                              <option key={z.value} value={z.value}>{z.label}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td>
+                          <select
+                            value={consignment.zone}
+                            onChange={(e) => handleFieldChange('zone', e.target.value)}
+                          >
+                            {ZONES.map((z) => (
+                              <option key={z} value={z}>{z}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={consignment.base_rate}
+                            onChange={(e) => handleFieldChange('base_rate', parseFloat(e.target.value) || 0)}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={consignment.docket_charges}
+                            onChange={(e) => handleFieldChange('docket_charges', parseFloat(e.target.value) || 0)}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={consignment.oda_charge}
+                            onChange={(e) => handleFieldChange('oda_charge', parseFloat(e.target.value) || 0)}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={consignment.fov}
+                            onChange={(e) => handleFieldChange('fov', parseFloat(e.target.value) || 0)}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={consignment.fuel_charge}
+                            onChange={(e) => handleFieldChange('fuel_charge', parseFloat(e.target.value) || 0)}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={consignment.gst}
+                            onChange={(e) => handleFieldChange('gst', parseFloat(e.target.value) || 0)}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            value={calculateTotal(consignment).toFixed(2)}
+                            readOnly
+                            className="excel-total-cell"
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            value={consignment.box1_dimensions}
+                            onChange={(e) => handleFieldChange('box1_dimensions', e.target.value)}
+                            placeholder="30*20*10"
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            value={consignment.box2_dimensions}
+                            onChange={(e) => handleFieldChange('box2_dimensions', e.target.value)}
+                            placeholder="30*20*10"
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            value={consignment.box3_dimensions}
+                            onChange={(e) => handleFieldChange('box3_dimensions', e.target.value)}
+                            placeholder="30*20*10"
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            value={consignment.remarks || ''}
+                            onChange={(e) => handleFieldChange('remarks', e.target.value)}
+                            placeholder="Remarks"
+                          />
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {(formErrors.date || formErrors.user_id || formErrors.name || formErrors.destination || formErrors.weight || formErrors.product_name) && (
+                  <div className="alert alert-error" style={{ marginTop: '1rem' }}>
+                    Please fill all required columns: Date, User, Name, Destination, Product, Weight.
+                  </div>
+                )}
+
+                {rateCardLoading && (
+                  <div className="alert" style={{ background: '#f0f9ff', border: '1px solid #bae6fd', color: '#0369a1', marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ animation: 'spin 1s linear infinite', display: 'inline-block' }}>⟳</span>
+                    Fetching rate card for this user...
+                  </div>
+                )}
+                {!rateCardLoading && rateCardError && (
+                  <div className="alert alert-error" style={{ marginTop: '1rem' }}>
+                    ⚠️ {rateCardError}
+                  </div>
+                )}
+                {!rateCardLoading && rateCardFetched && !rateCardError && (
+                  <div className="alert" style={{ background: '#f0fdf4', border: '1px solid #86efac', color: '#166534', marginTop: '1rem' }}>
+                    ✓ Rate card loaded — pricing fields auto-filled in the sheet.
+                  </div>
+                )}
+              </>
+            )}
+
+            {isEditMode && (
+              <>
             {/* Basic Information Section */}
             <h3 className="section-title">Basic Information</h3>
             <div className="form-grid">
@@ -760,6 +1137,15 @@ function FormModal({
                   required
                 />
                 {formErrors.name && <span className="error-text">{formErrors.name}</span>}
+              </div>
+              <div className="form-group">
+                <label>Docket No</label>
+                <input
+                  type="text"
+                  value={consignment.docket_no || ''}
+                  onChange={(e) => handleFieldChange('docket_no', e.target.value)}
+                  placeholder="Enter docket number"
+                />
               </div>
               <div className="form-group">
                 <label>User *</label>
@@ -1129,6 +1515,8 @@ function FormModal({
                 rows="3"
               />
             </div>
+              </>
+            )}
           </div>
           <div className="modal-footer">
             <button type="button" className="btn btn-secondary" onClick={onClose}>
@@ -1163,6 +1551,10 @@ function ViewModal({ consignment, onClose, calculateTotal }) {
             <div className="view-group">
               <label>Consignment No</label>
               <p>{consignment.consignment_no}</p>
+            </div>
+            <div className="view-group">
+              <label>Docket No</label>
+              <p>{consignment.docket_no || 'N/A'}</p>
             </div>
             <div className="view-group">
               <label>Date</label>

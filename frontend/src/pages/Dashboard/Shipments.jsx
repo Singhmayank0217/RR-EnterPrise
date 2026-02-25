@@ -185,6 +185,7 @@ export default function ShipmentsPage() {
             <thead>
               <tr>
                 <th>Tracking #</th>
+                <th>Docket No</th>
                 <th>Type</th>
                 <th>Origin</th>
                 <th>Destination</th>
@@ -198,6 +199,7 @@ export default function ShipmentsPage() {
               {filteredShipments.map((shipment) => (
                 <tr key={shipment._id}>
                   <td><strong>{shipment.tracking_number}</strong></td>
+                  <td>{shipment.docket_no || '—'}</td>
                   <td style={{ textTransform: 'capitalize' }}>{shipment.shipment_type}</td>
                   <td>{shipment.origin.city}</td>
                   <td>{shipment.destination.city}</td>

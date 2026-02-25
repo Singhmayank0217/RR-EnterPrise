@@ -23,6 +23,7 @@ class PaymentMethod(str, Enum):
 class InvoiceItem(BaseModel):
     shipment_id: Optional[str] = ""
     tracking_number: Optional[str] = ""
+    docket_no: Optional[str] = ""
     description: Optional[str] = ""
     weight_kg: Optional[float] = 0
     amount: Optional[float] = 0

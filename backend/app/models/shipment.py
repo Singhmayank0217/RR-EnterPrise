@@ -42,6 +42,7 @@ class TrackingEvent(BaseModel):
 
 class ShipmentBase(BaseModel):
     shipment_type: ShipmentType
+    docket_no: Optional[str] = None
     origin: Address
     destination: Address
     weight_kg: float

@@ -278,6 +278,68 @@
   overflow-y: auto;
 }
 
+.excel-sheet-wrapper {
+  overflow-x: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.excel-sheet-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+}
+
+.excel-sheet-table th,
+.excel-sheet-table td {
+  border: 1px solid #e2e8f0;
+  padding: 0.45rem;
+  min-width: 135px;
+  vertical-align: top;
+}
+
+.excel-sheet-table th {
+  position: sticky;
+  top: 0;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 0.78rem;
+  font-weight: 700;
+  z-index: 1;
+  white-space: nowrap;
+}
+
+.excel-sheet-table td input,
+.excel-sheet-table td select {
+  width: 100%;
+  min-width: 120px;
+  padding: 0.6rem 0.65rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 0.86rem;
+  background: #ffffff;
+  color: #0f172a;
+}
+
+.excel-sheet-table td input:focus,
+.excel-sheet-table td select:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+
+.excel-sheet-table td select:disabled {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.excel-total-cell {
+  background: #ecfdf5 !important;
+  color: #065f46 !important;
+  font-weight: 700;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);

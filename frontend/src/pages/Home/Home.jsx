@@ -502,6 +502,14 @@ const keyframes = `
       box-shadow: 0 0 40px rgba(139, 92, 246, 0.6);
     }
   }
+  @keyframes spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
     @keyframes slideUp {
   from {
     opacity: 0;
@@ -519,7 +527,8 @@ export default function Home() {
   const [trackingNumber, setTrackingNumber] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [trackingResult, setTrackingResult] = useState(null);
-  const [showTracking, setShowTracking] = useState(false);
+  const [trackingLoading, setTrackingLoading] = useState(false);
+  const [trackingError, setTrackingError] = useState("");
   const [isMobile, setIsMobile] = useState(false);
   
 
@@ -530,17 +539,103 @@ export default function Home() {
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
-  const handleTrack = (e) => {
+  const formatDisplayDate = (value) => {
+    if (!value) return "N/A";
+    if (typeof value === "string" && /\d{1,2}\s+[A-Za-z]{3}\s+\d{4}/.test(value)) {
+      return value;
+    }
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return String(value);
+    return parsed.toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  };
+
+  const normalizeStatus = (status) => {
+    if (!status) return "In Transit";
+    return String(status)
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (char) => char.toUpperCase());
+  };
+
+  const getStatusBadgeStyle = (status) => {
+    const normalized = String(status || "").toLowerCase();
+    if (normalized === "delivered") {
+      return {
+        background: "rgba(16, 185, 129, 0.18)",
+        color: "#34d399",
+        border: "1px solid rgba(16, 185, 129, 0.45)",
+      };
+    }
+    if (normalized === "out for delivery") {
+      return {
+        background: "rgba(59, 130, 246, 0.18)",
+        color: "#93c5fd",
+        border: "1px solid rgba(59, 130, 246, 0.45)",
+      };
+    }
+    if (normalized === "cancelled") {
+      return {
+        background: "rgba(239, 68, 68, 0.18)",
+        color: "#fca5a5",
+        border: "1px solid rgba(239, 68, 68, 0.45)",
+      };
+    }
+    return {
+      background: "rgba(245, 158, 11, 0.18)",
+      color: "#fbbf24",
+      border: "1px solid rgba(245, 158, 11, 0.45)",
+    };
+  };
+
+  const handleTrack = async (e) => {
     e.preventDefault();
-    if (trackingNumber.trim()) {
+    const consignmentId = trackingNumber.trim();
+
+    if (!consignmentId) {
+      setTrackingResult(null);
+      setTrackingError("Please enter Docket No / Consignment ID.");
+      return;
+    }
+
+    setTrackingLoading(true);
+    setTrackingError("");
+    setTrackingResult(null);
+
+    try {
+      const apiBase = import.meta.env.VITE_API_URL || "/api";
+      let response = await fetch(
+        `${apiBase}/track/${encodeURIComponent(consignmentId)}`,
+        { method: "GET" }
+      );
+
+      if (!response.ok) {
+        response = await fetch(
+          `${apiBase}/shipments/track/${encodeURIComponent(consignmentId)}`,
+          { method: "GET" }
+        );
+      }
+
+      if (!response.ok) throw new Error("Invalid consignment id");
+
+      const data = await response.json();
+      const latestEvent = Array.isArray(data?.tracking_history) && data.tracking_history.length > 0
+        ? data.tracking_history[data.tracking_history.length - 1]
+        : null;
+
       setTrackingResult({
-        number: trackingNumber,
-        status: "In Transit",
-        from: "New Delhi",
-        to: "Mumbai",
-        progress: 65,
+        consignment_id: data?.consignment_id || data?.tracking_number || consignmentId,
+        status: normalizeStatus(data?.status),
+        current_location: data?.current_location || latestEvent?.location || "N/A",
+        expected_delivery: formatDisplayDate(data?.expected_delivery),
+        last_updated: formatDisplayDate(data?.last_updated || latestEvent?.timestamp),
       });
-      setShowTracking(true);
+    } catch {
+      setTrackingError("Invalid ID. Please enter a valid Docket No / Consignment ID.");
+    } finally {
+      setTrackingLoading(false);
     }
   };
 
@@ -686,8 +781,9 @@ export default function Home() {
                   />
                 </div>
                 <button
-                  type="button"
+                  type="submit"
                   style={styles.trackBtn}
+                  disabled={trackingLoading}
                   onMouseEnter={(e) =>
                     (e.currentTarget.style.background =
                       "linear-gradient(to right, #eab308, #ca8a04)")
@@ -696,61 +792,104 @@ export default function Home() {
                     (e.currentTarget.style.background =
                       "linear-gradient(to right, #facc15, #eab308)")
                   }
-                  onClick={() => navigate("/login")}
                 >
-                  Track
+                  {trackingLoading ? (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                      <span
+                        style={{
+                          width: "14px",
+                          height: "14px",
+                          borderRadius: "50%",
+                          border: "2px solid rgba(0, 0, 0, 0.25)",
+                          borderTopColor: "rgba(0, 0, 0, 0.75)",
+                          animation: "spin 0.8s linear infinite",
+                        }}
+                      />
+                      Tracking...
+                    </span>
+                  ) : (
+                    "Track"
+                  )}
                 </button>
               </div>
             </form>
 
-            {/* Tracking Result */}
-            {showTracking && trackingResult && (
-              <div style={styles.trackingResult}>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginBottom: "16px",
-                  }}
-                >
-                  <span style={{ color: "#d1d5db" }}>
-                    Tracking #{trackingResult.number}
-                  </span>
+            {trackingError && (
+              <div
+                style={{
+                  marginTop: "12px",
+                  background: "rgba(239, 68, 68, 0.16)",
+                  border: "1px solid rgba(239, 68, 68, 0.4)",
+                  color: "#fca5a5",
+                  borderRadius: "10px",
+                  padding: "10px 14px",
+                  textAlign: "left",
+                  maxWidth: "600px",
+                  marginLeft: "auto",
+                  marginRight: "auto",
+                  fontSize: "14px",
+                  fontWeight: "500",
+                }}
+              >
+                {trackingError}
+              </div>
+            )}
+
+            {trackingResult && (
+              <div
+                style={{
+                  marginTop: "18px",
+                  maxWidth: "600px",
+                  marginLeft: "auto",
+                  marginRight: "auto",
+                  textAlign: "left",
+                  padding: "22px",
+                  borderRadius: "14px",
+                  background:
+                    "linear-gradient(to bottom right, rgba(30, 41, 59, 0.6), rgba(59, 130, 246, 0.08))",
+                  border: "1px solid rgba(139, 92, 246, 0.28)",
+                  boxShadow: "0 14px 30px rgba(2, 6, 23, 0.35)",
+                  animation: "fadeInUp 0.4s ease-out, slideUp 0.4s ease-out",
+                }}
+              >
+                <h3 style={{ margin: "0 0 14px", fontSize: "20px", color: "#e2e8f0" }}>
+                  Tracking Details
+                </h3>
+
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
+                  <Package size={16} color="#cbd5e1" />
+                  <span style={{ color: "#94a3b8", minWidth: "140px" }}>Status:</span>
                   <span
                     style={{
-                      padding: "4px 16px",
-                      borderRadius: "9999px",
-                      background: "rgba(59, 130, 246, 0.2)",
-                      color: "#93c5fd",
-                      fontSize: "14px",
-                      fontWeight: "500",
+                      ...getStatusBadgeStyle(trackingResult.status),
+                      borderRadius: "999px",
+                      padding: "3px 10px",
+                      fontSize: "12px",
+                      fontWeight: 700,
+                      letterSpacing: "0.02em",
+                      textTransform: "none",
                     }}
                   >
                     {trackingResult.status}
                   </span>
                 </div>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "center",
-                    alignItems: "center",
-                    gap: "16px",
-                    fontSize: "18px",
-                    marginBottom: "16px",
-                  }}
-                >
-                  <span>{trackingResult.from}</span>
-                  <ArrowRight size={20} style={{ color: "#a855f7" }} />
-                  <span>{trackingResult.to}</span>
+
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
+                  <Clock size={16} color="#cbd5e1" />
+                  <span style={{ color: "#94a3b8", minWidth: "140px" }}>Last Updated:</span>
+                  <span style={{ color: "#e2e8f0" }}>{trackingResult.last_updated}</span>
                 </div>
-                <div style={styles.progressBar}>
-                  <div
-                    style={{
-                      ...styles.progressFill,
-                      width: `${trackingResult.progress}%`,
-                    }}
-                  />
+
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
+                  <MapPin size={16} color="#cbd5e1" />
+                  <span style={{ color: "#94a3b8", minWidth: "140px" }}>Current Location:</span>
+                  <span style={{ color: "#e2e8f0" }}>{trackingResult.current_location}</span>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <Truck size={16} color="#cbd5e1" />
+                  <span style={{ color: "#94a3b8", minWidth: "140px" }}>Expected Delivery:</span>
+                  <span style={{ color: "#e2e8f0" }}>{trackingResult.expected_delivery}</span>
                 </div>
               </div>
             )}

@@ -409,6 +409,7 @@ function InvoiceDetailModal({ invoice, onClose, onDownload, onPayment, downloadi
                   <tr>
                     <th>#</th>
                     <th>Description</th>
+                    <th>Docket No</th>
                     <th>Tracking</th>
                     <th>Weight</th>
                     <th style={{ textAlign: 'right' }}>Amount</th>
@@ -418,14 +419,19 @@ function InvoiceDetailModal({ invoice, onClose, onDownload, onPayment, downloadi
                   {invoice.items.map((item, i) => (
                     <tr key={i}>
                       <td style={{ color: 'var(--text-secondary)' }}>{i + 1}</td>
-                      <td style={{ fontWeight: 500 }}>{item.description}</td>
+                      <td style={{ fontWeight: 500, color:'var(--text-secondary)' }}>{item.description}</td>
                       <td>
-                        <span style={{ fontSize: '0.8rem', background: 'var(--bg-page)', padding: '2px 8px', borderRadius: '4px', border: '1px solid var(--border-subtle)' }}>
+                        <span style={{ fontSize: '0.8rem',color:'var(--text-secondary)' ,background: 'var(--bg-page)', padding: '2px 8px', borderRadius: '4px', border: '1px solid var(--border-subtle)' }}>
+                          {item.docket_no || '—'}
+                        </span>
+                      </td>
+                      <td>
+                        <span style={{ fontSize: '0.8rem',color:'var(--text-secondary)', background: 'var(--bg-page)', padding: '2px 8px', borderRadius: '4px', border: '1px solid var(--border-subtle)' }}>
                           {item.tracking_number || '—'}
                         </span>
                       </td>
-                      <td>{item.weight_kg ? `${item.weight_kg} kg` : '—'}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 600 }}>{fmt(item.amount)}</td>
+                      <td style={{color:'var(--text-secondary)'}}>{item.weight_kg ? `${item.weight_kg} kg` : '—'}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 600,color:'var(--text-secondary)' }}>{fmt(item.amount)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -466,10 +472,10 @@ function InvoiceDetailModal({ invoice, onClose, onDownload, onPayment, downloadi
                   <tbody>
                     {invoice.payments.map((p, i) => (
                       <tr key={i}>
-                        <td>{fmtDate(p.payment_date)}</td>
-                        <td style={{ textTransform: 'capitalize' }}>{String(p.method || '').replace('_', ' ')}</td>
-                        <td style={{ color: 'var(--text-secondary)' }}>{p.transaction_ref || '—'}</td>
-                        <td style={{ textAlign: 'right', color: '#16a34a', fontWeight: 600 }}>{fmt(p.amount)}</td>
+                        <td style={{color:'var(--text-secondary)',fontWeight:500}}>{fmtDate(p.payment_date)}</td>
+                        <td style={{ textTransform: 'capitalize',color:'var(--text-secondary)',fontWeight:500 }}>{String(p.method || '').replace('_', ' ')}</td>
+                        <td style={{ color: 'var(--text-secondary)',fontWeight:500 }}>{p.transaction_ref || '—'}</td>
+                        <td style={{ textAlign: 'right', color: '#16a34a', fontWeight: 800 }}>{fmt(p.amount)}</td>
                       </tr>
                     ))}
                   </tbody>

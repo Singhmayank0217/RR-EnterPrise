@@ -45,6 +45,42 @@ def _fix_doc(doc: dict) -> dict:
     return doc
 
 
+async def _enrich_items_with_docket(db, doc: dict) -> dict:
+    """Fill missing docket numbers on invoice items from consignments/shipments."""
+    items = doc.get("items", []) or []
+    updated = False
+
+    for item in items:
+        if item.get("docket_no"):
+            continue
+
+        docket_no = None
+        shipment_id = item.get("shipment_id")
+        tracking_number = item.get("tracking_number")
+
+        if shipment_id:
+            consignment = await db.consignments.find_one({"shipment_id": shipment_id})
+            if consignment:
+                docket_no = consignment.get("docket_no") or consignment.get("consignment_no")
+        if not docket_no and tracking_number:
+            shipment = await db.shipments.find_one({"tracking_number": tracking_number})
+            if shipment:
+                docket_no = shipment.get("docket_no")
+
+        if docket_no:
+            item["docket_no"] = docket_no
+            updated = True
+
+    if updated:
+        await db.invoices.update_one(
+            {"_id": ObjectId(doc["_id"])},
+            {"$set": {"items": items, "updated_at": datetime.utcnow()}}
+        )
+        doc["items"] = items
+
+    return doc
+
+
 # ─────────────────────────────────────────────
 #  CRUD
 # ─────────────────────────────────────────────
@@ -69,7 +105,9 @@ async def list_invoices(
     result = []
     async for doc in cursor:
         try:
-            result.append(InvoiceResponse(**_fix_doc(doc)))
+            fixed = _fix_doc(doc)
+            fixed = await _enrich_items_with_docket(db, fixed)
+            result.append(InvoiceResponse(**fixed))
         except Exception as e:
             print(f"Skipping invoice {doc.get('_id')}: {e}")
     return result
@@ -85,7 +123,9 @@ async def get_invoice(
     doc = await db.invoices.find_one({"_id": ObjectId(invoice_id)})
     if not doc:
         raise HTTPException(status_code=404, detail="Invoice not found")
-    return InvoiceResponse(**_fix_doc(doc))
+    fixed = _fix_doc(doc)
+    fixed = await _enrich_items_with_docket(db, fixed)
+    return InvoiceResponse(**fixed)
 
 
 @router.post("/{invoice_id}/payment")
@@ -308,9 +348,9 @@ def _build_pdf(invoice: dict) -> BytesIO:
     story.append(Spacer(1, 5 * mm))
 
     # ── Line Items Table ─────────────────────────────────────────────────
-    col_w = [usable_w * 0.05, usable_w * 0.45, usable_w * 0.12,
-             usable_w * 0.18, usable_w * 0.20]
-    item_header = ["#", "Description", "Weight (kg)", "Tracking No.", "Amount (₹)"]
+    col_w = [usable_w * 0.05, usable_w * 0.37, usable_w * 0.14,
+             usable_w * 0.12, usable_w * 0.14, usable_w * 0.18]
+    item_header = ["#", "Description", "Docket No.", "Weight (kg)", "Tracking No.", "Amount (₹)"]
     item_rows = [item_header]
 
     items = invoice.get("items", [])
@@ -318,13 +358,14 @@ def _build_pdf(invoice: dict) -> BytesIO:
         item_rows.append([
             str(i),
             item.get("description", ""),
+            item.get("docket_no", "—") or "—",
             f"{item.get('weight_kg', 0):.2f}",
             item.get("tracking_number", "—"),
             f"₹{item.get('amount', 0):,.2f}",
         ])
 
     if not items:
-        item_rows.append(["—", "No items", "—", "—", "—"])
+        item_rows.append(["—", "No items", "—", "—", "—", "—"])
 
     item_table = Table(item_rows, colWidths=col_w, repeatRows=1)
     item_table.setStyle(TableStyle([
@@ -472,6 +513,7 @@ async def download_invoice_pdf(
         raise HTTPException(status_code=404, detail="Invoice not found")
 
     doc = _fix_doc(doc)
+    doc = await _enrich_items_with_docket(db, doc)
     buf = _build_pdf(doc)
     filename = f"invoice_{doc.get('invoice_number', invoice_id)}.pdf"
 
@@ -498,6 +540,7 @@ async def download_invoice_excel(
         raise HTTPException(status_code=404, detail="Invoice not found")
 
     doc = _fix_doc(doc)
+    doc = await _enrich_items_with_docket(db, doc)
 
     # Sheet 1 – Invoice Summary
     summary = {
@@ -521,11 +564,12 @@ async def download_invoice_excel(
     items = doc.get("items", [])
     df_items = pd.DataFrame([{
         "Description": i.get("description", ""),
+        "Docket No": i.get("docket_no", ""),
         "Tracking Number": i.get("tracking_number", ""),
         "Weight (kg)": i.get("weight_kg", 0),
         "Amount (₹)": i.get("amount", 0),
     } for i in items]) if items else pd.DataFrame(
-        columns=["Description", "Tracking Number", "Weight (kg)", "Amount (₹)"]
+        columns=["Description", "Docket No", "Tracking Number", "Weight (kg)", "Amount (₹)"]
     )
 
     # Sheet 3 – Payments

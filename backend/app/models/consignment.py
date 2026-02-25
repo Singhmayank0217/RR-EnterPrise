@@ -24,6 +24,7 @@ class BoxDimensions(BaseModel):
 class ConsignmentBase(BaseModel):
     date: date
     name: str  # Customer/sender name (display)
+    docket_no: Optional[str] = None
     user_id: Optional[str] = None  # Link to user
     destination: str
     destination_city: Optional[str] = None
@@ -63,6 +64,7 @@ class ConsignmentCreate(ConsignmentBase):
 class ConsignmentUpdate(BaseModel):
     date: Optional[date] = None
     name: Optional[str] = None
+    docket_no: Optional[str] = None
     user_id: Optional[str] = None
     destination: Optional[str] = None
     destination_city: Optional[str] = None

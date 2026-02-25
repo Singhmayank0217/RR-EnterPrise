@@ -114,15 +114,17 @@ async def create_shipment_for_consignment(consignment_dict: dict, user: Optional
             pass
 
     # Create shipment document
+    docket_suffix = f" (Docket: {consignment_dict.get('docket_no')})" if consignment_dict.get("docket_no") else ""
     shipment = {
         "tracking_number": generate_tracking_number(),
         "customer_id": consignment_dict.get("user_id", ""),
         "shipment_type": shipment_type,
+        "docket_no": consignment_dict.get("docket_no"),
         "origin": origin,
         "destination": destination,
         "weight_kg": weight,
         "declared_value": float(consignment_dict.get("value", 0) or 0),
-        "description": consignment_dict.get("product_name", ""),
+        "description": f"{consignment_dict.get('product_name', '')}{docket_suffix}",
         "special_instructions": consignment_dict.get("remarks", ""),
         "status": ShipmentStatus.PENDING.value,
         "tracking_history": [{
@@ -193,10 +195,12 @@ async def create_invoice_for_consignment(
     consignment_no = consignment_dict.get("consignment_no", "N/A")
     
     # Create invoice item
+    docket_suffix = f" (Docket: {consignment_dict.get('docket_no')})" if consignment_dict.get("docket_no") else ""
     items = [{
         "shipment_id": shipment_id or "",
         "tracking_number": tracking_number or "",
-        "description": f"Consignment {consignment_no} - {consignment_dict.get('product_name', 'Package')} to {consignment_dict.get('destination', 'Destination')}",
+        "docket_no": consignment_dict.get("docket_no", ""),
+        "description": f"Consignment {consignment_no}{docket_suffix} - {consignment_dict.get('product_name', 'Package')} to {consignment_dict.get('destination', 'Destination')}",
         "weight_kg": float(consignment_dict.get("weight", 0)),
         "amount": round(subtotal_with_fuel, 2)
     }]
@@ -218,7 +222,7 @@ async def create_invoice_for_consignment(
         "payment_status": PaymentStatus.PENDING.value,
         "payments": [],
         "due_date": (datetime.utcnow() + timedelta(days=30)).date().isoformat(),
-        "notes": f"Auto-generated invoice for consignment {consignment_no}",
+        "notes": f"Auto-generated invoice for consignment {consignment_no}{docket_suffix}",
         "created_at": datetime.utcnow(),
         "created_by": token_data.user_id
     }
@@ -274,6 +278,8 @@ async def create_consignment(
     
     consignment_dict["sr_no"] = await get_next_sr_no()
     consignment_dict["consignment_no"] = generate_consignment_number()
+    if not consignment_dict.get("docket_no"):
+        consignment_dict["docket_no"] = consignment_dict["consignment_no"]
     consignment_dict["total"] = (
         consignment_dict.get("base_rate", 0) + 
         consignment_dict.get("docket_charges", 0) + 
@@ -368,6 +374,14 @@ async def list_consignments(
     async for doc in cursor:
         try:
             doc["_id"] = str(doc["_id"])
+            if "docket_no" not in doc and "docketNo" in doc:
+                doc["docket_no"] = doc.get("docketNo")
+            if not doc.get("docket_no") and doc.get("consignment_no"):
+                doc["docket_no"] = doc.get("consignment_no")
+                await db.consignments.update_one(
+                    {"_id": ObjectId(doc["_id"])},
+                    {"$set": {"docket_no": doc["docket_no"]}}
+                )
             # Handle potential missing fields or bad data by letting Pydantic validate
             # If validation fails, we log and skip instead of crashing the whol endpoint
             consignments.append(ConsignmentResponse(**doc))
@@ -391,6 +405,14 @@ async def get_consignments_by_user(
     cursor = db.consignments.find({"user_id": user_id}).sort("sr_no", -1).skip(skip).limit(limit)
     consignments = []
     async for doc in cursor:
+        if "docket_no" not in doc and "docketNo" in doc:
+            doc["docket_no"] = doc.get("docketNo")
+        if not doc.get("docket_no") and doc.get("consignment_no"):
+            doc["docket_no"] = doc.get("consignment_no")
+            await db.consignments.update_one(
+                {"_id": doc["_id"]},
+                {"$set": {"docket_no": doc["docket_no"]}}
+            )
         doc["_id"] = str(doc["_id"])
         consignments.append(ConsignmentResponse(**doc))
     
@@ -410,6 +432,14 @@ async def get_consignments_by_invoice(
     cursor = db.consignments.find({"invoice_id": invoice_id}).sort("sr_no", -1).skip(skip).limit(limit)
     consignments = []
     async for doc in cursor:
+        if "docket_no" not in doc and "docketNo" in doc:
+            doc["docket_no"] = doc.get("docketNo")
+        if not doc.get("docket_no") and doc.get("consignment_no"):
+            doc["docket_no"] = doc.get("consignment_no")
+            await db.consignments.update_one(
+                {"_id": doc["_id"]},
+                {"$set": {"docket_no": doc["docket_no"]}}
+            )
         doc["_id"] = str(doc["_id"])
         consignments.append(ConsignmentResponse(**doc))
     
@@ -428,6 +458,14 @@ async def get_consignment(
     if not doc:
         raise HTTPException(status_code=404, detail="Consignment not found")
     
+    if "docket_no" not in doc and "docketNo" in doc:
+        doc["docket_no"] = doc.get("docketNo")
+    if not doc.get("docket_no") and doc.get("consignment_no"):
+        doc["docket_no"] = doc.get("consignment_no")
+        await db.consignments.update_one(
+            {"_id": ObjectId(consignment_id)},
+            {"$set": {"docket_no": doc["docket_no"]}}
+        )
     doc["_id"] = str(doc["_id"])
     return ConsignmentResponse(**doc)
 
@@ -458,6 +496,8 @@ async def sync_related_documents(db, consignment_doc):
                 shipment_update["destination"] = new_dest
                 shipment_update["total_weight"] = float(consignment_doc.get("weight", 0))
                 shipment_update["description"] = consignment_doc.get("product_name", "")
+                if "docket_no" in consignment_doc:
+                    shipment_update["docket_no"] = consignment_doc.get("docket_no")
                 
                 dims = []
                 if consignment_doc.get("box1_dimensions"): dims.append(consignment_doc["box1_dimensions"])
@@ -502,10 +542,12 @@ async def sync_related_documents(db, consignment_doc):
                     if not shipment_id_ref:
                         shipment_id_ref = current_items[0].get("shipment_id", "")
 
+                docket_suffix = f" (Docket: {consignment_doc.get('docket_no')})" if consignment_doc.get("docket_no") else ""
                 new_item = {
                     "shipment_id": shipment_id_ref,
                     "tracking_number": tracking_number,
-                    "description": f"Consignment {consignment_doc.get('consignment_no')} - {consignment_doc.get('product_name', 'Package')} to {consignment_doc.get('destination', 'Destination')}",
+                    "docket_no": consignment_doc.get("docket_no", ""),
+                    "description": f"Consignment {consignment_doc.get('consignment_no')}{docket_suffix} - {consignment_doc.get('product_name', 'Package')} to {consignment_doc.get('destination', 'Destination')}",
                     "weight_kg": float(consignment_doc.get("weight", 0)),
                     "amount": round(subtotal_with_fuel, 2)
                 }
@@ -660,6 +702,7 @@ async def export_consignments_excel(
             "SR NO": doc.get("sr_no"),
             "DATE": doc.get("date"),
             "CONSIGNMENT NO": doc.get("consignment_no"),
+            "DOCKET NO": doc.get("docket_no", ""),
             "NAME": doc.get("name"),
             "USER ID": doc.get("user_id", ""),
             "DESTINATION": doc.get("destination"),
