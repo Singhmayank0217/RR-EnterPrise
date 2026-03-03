@@ -485,7 +485,7 @@ function UserDetailsModal({ user, onClose }) {
                         <tr key={rc._id}>
                           <td style={{ color: '#d5dbe2ff' }}><strong>{rc.delivery_partner}</strong></td>
                           <td style={{ color: '#d5dbe2ff' }}>{rc.service_type}</td>
-                          <td>{rc.mode}</td>
+                          <td style={{ color: '#d5dbe2ff' }}>{rc.mode}</td>
                           <td style={{ color: '#d5dbe2ff' }}>{rc.region || rc.zone || '-'}</td>
                           <td style={{ color: '#d5dbe2ff' }}>{formatCurrency(rc.base_rate)}</td>
                           <td style={{ color: '#d5dbe2ff' }}>{formatCurrency(rc.docket_charge)}</td>

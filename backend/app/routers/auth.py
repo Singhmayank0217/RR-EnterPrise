@@ -17,6 +17,40 @@ from ..models.user import TokenData
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
 
+def normalize_user_for_response(user: dict) -> dict:
+    """Normalize legacy user documents so they satisfy UserResponse schema."""
+    normalized = dict(user)
+    normalized.pop("hashed_password", None)
+    normalized.pop("password_hash", None)
+
+    if normalized.get("_id") is not None:
+        normalized["_id"] = str(normalized["_id"])
+
+    role = normalized.get("role")
+    if role == "admin":
+        role = UserRole.CHILD_ADMIN.value
+    allowed_roles = {r.value for r in UserRole}
+    if role not in allowed_roles:
+        role = UserRole.CUSTOMER.value
+    normalized["role"] = role
+
+    full_name = (normalized.get("full_name") or "").strip()
+    if not full_name:
+        full_name = (normalized.get("company_name") or "").strip()
+    if not full_name and normalized.get("email"):
+        full_name = str(normalized["email"]).split("@")[0]
+    normalized["full_name"] = full_name or "User"
+
+    normalized.setdefault("address", None)
+    normalized.setdefault("city", None)
+    normalized.setdefault("state", None)
+    normalized.setdefault("pincode", None)
+    normalized.setdefault("pricing_rule_id", None)
+    normalized.setdefault("permissions", [])
+    normalized.setdefault("is_active", True)
+    return normalized
+
+
 @router.post("/register", response_model=UserResponse)
 async def register_user(user: UserCreate):
     """Register a new user (customer by default)."""
@@ -98,8 +132,14 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
                 detail="Account is disabled"
             )
         
+        role_for_token = user.get("role", UserRole.CUSTOMER.value)
+        if role_for_token == "admin":
+            role_for_token = UserRole.CHILD_ADMIN.value
+        if role_for_token not in {r.value for r in UserRole}:
+            role_for_token = UserRole.CUSTOMER.value
+
         access_token = create_access_token(
-            data={"sub": str(user["_id"]), "role": user.get("role", UserRole.CUSTOMER)}
+            data={"sub": str(user["_id"]), "role": role_for_token}
         )
         return Token(access_token=access_token, token_type="bearer")
     except HTTPException:
@@ -121,9 +161,7 @@ async def get_current_user(token_data: TokenData = Depends(get_current_user_toke
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         
-        user.pop("hashed_password", None)
-        user["_id"] = str(user["_id"])
-        return UserResponse(**user)
+        return UserResponse(**normalize_user_for_response(user))
     except HTTPException:
         raise
     except Exception as e:
@@ -152,9 +190,7 @@ async def update_current_user(
             )
         
         user = await db.users.find_one({"_id": ObjectId(token_data.user_id)})
-        user.pop("hashed_password", None)
-        user["_id"] = str(user["_id"])
-        return UserResponse(**user)
+        return UserResponse(**normalize_user_for_response(user))
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -216,15 +252,7 @@ async def list_users(
         users = []
         async for user in cursor:
             try:
-                user.pop("hashed_password", None)
-                user["_id"] = str(user["_id"])
-                user.setdefault("address", None)
-                user.setdefault("city", None)
-                user.setdefault("state", None)
-                user.setdefault("pincode", None)
-                user.setdefault("pricing_rule_id", None)
-                user.setdefault("permissions", [])
-                users.append(UserResponse(**user))
+                users.append(UserResponse(**normalize_user_for_response(user)))
             except Exception as e:
                 print(f"Error processing user {user.get('email', 'unknown')}: {e}")
                 continue

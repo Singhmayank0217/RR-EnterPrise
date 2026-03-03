@@ -11,6 +11,18 @@ from ..models.user import TokenData, UserRole
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
 
+def normalize_role_value(role: Optional[str]) -> Optional[UserRole]:
+    """Normalize legacy/stale role values to supported UserRole enum values."""
+    if not role:
+        return None
+    if role == "admin":
+        role = UserRole.CHILD_ADMIN.value
+    try:
+        return UserRole(role)
+    except ValueError:
+        return UserRole.CUSTOMER
+
+
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a password against its hash using bcrypt directly."""
     try:
@@ -61,7 +73,7 @@ def decode_token(token: str) -> TokenData:
                 detail="Invalid token",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-        return TokenData(user_id=user_id, role=UserRole(role) if role else None)
+        return TokenData(user_id=user_id, role=normalize_role_value(role))
     except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Plus, Download, Trash2, Save, X, Search, Eye, Edit2, AlertCircle, Box, Scale, IndianRupee } from 'lucide-react';
 import { AgGridReact } from 'ag-grid-react';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community'; 
@@ -222,22 +222,33 @@ function Consignments() {
     if (!formData.destination) errors.destination = 'Destination is required';
     if (!formData.weight || formData.weight <= 0) errors.weight = 'Weight must be greater than 0';
     if (!formData.product_name) errors.product_name = 'Product name is required';
+    if (!formData.delivery_partner) errors.delivery_partner = 'Delivery partner is required';
+    if (!formData.service_type) errors.service_type = 'Service type is required';
+    if (!formData.mode) errors.mode = 'Mode is required';
+    if (formData.service_type === 'cargo' && !formData.region) errors.region = 'Region is required for cargo';
+    if (formData.service_type === 'courier' && !formData.courier_zone) {
+      errors.courier_zone = 'Courier zone is required for courier';
+    }
     
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   }, [formData]);
 
   // Handle add entry
-  const handleAddEntry = async (e) => {
-    e.preventDefault();
+  const handleAddEntry = async (e, options = {}) => {
+    if (e?.preventDefault) e.preventDefault();
+    const keepOpen = Boolean(options?.keepOpen);
+
     if (!validateForm()) {
       toast.error('Please fill all required fields');
-      return;
+      return false;
     }
 
     try {
       await consignmentsAPI.create(formData);
-      setShowAddModal(false);
+      if (!keepOpen) {
+        setShowAddModal(false);
+      }
       setFormData(getEmptyConsignment());
       setRateCardFetched(false);
       setFormErrors({});
@@ -245,9 +256,11 @@ function Consignments() {
       const response = await consignmentsAPI.list();
       setConsignments(response.data);
       toast.success('Consignment added successfully!');
+      return true;
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to create entry');
       console.error(err);
+      return false;
     }
   };
 
@@ -703,7 +716,200 @@ function FormModal({
   fetchRateCard,
   formErrors,
 }) {
+  const excelTableRef = useRef(null);
+  const draftRowRef = useRef(consignment);
+  const submittedRowsRef = useRef([]);
+  const [historyCursor, setHistoryCursor] = useState(-1); // -1 = current draft row
+
+  const getNavigableControls = useCallback(() => {
+    if (!excelTableRef.current) return [];
+    return Array.from(
+      excelTableRef.current.querySelectorAll(
+        'tbody tr td input:not([type="hidden"]):not([disabled]), tbody tr td select:not([disabled]), tbody tr td textarea:not([disabled])'
+      )
+    );
+  }, []);
+
+  const focusControlByIndex = useCallback((index) => {
+    const controls = getNavigableControls();
+    if (!controls.length) return;
+    const boundedIndex = Math.max(0, Math.min(index, controls.length - 1));
+    const control = controls[boundedIndex];
+    if (control) {
+      control.focus();
+      if (typeof control.select === 'function') {
+        control.select();
+      }
+    }
+  }, [getNavigableControls]);
+
+  const focusActiveControlIndex = useCallback((activeEl) => {
+    const controls = getNavigableControls();
+    const index = controls.indexOf(activeEl);
+    return { controls, index };
+  }, [getNavigableControls]);
+
+  useEffect(() => {
+    if (!isEditMode) {
+      setTimeout(() => focusControlByIndex(0), 0);
+    }
+  }, [isEditMode, focusControlByIndex]);
+
+  useEffect(() => {
+    if (!isEditMode && historyCursor === -1) {
+      draftRowRef.current = consignment;
+    }
+  }, [consignment, isEditMode, historyCursor]);
+
+  const navigateHistoryRow = useCallback((direction, columnIndex) => {
+    const rows = submittedRowsRef.current;
+    if (!rows.length) return;
+
+    if (direction === 'up') {
+      const nextCursor = historyCursor === -1 ? rows.length - 1 : Math.max(0, historyCursor - 1);
+      setHistoryCursor(nextCursor);
+      setConsignment({ ...rows[nextCursor] });
+      setTimeout(() => focusControlByIndex(columnIndex), 0);
+      return;
+    }
+
+    if (direction === 'down') {
+      if (historyCursor === -1) return;
+      const nextCursor = historyCursor + 1;
+      if (nextCursor >= rows.length) {
+        setHistoryCursor(-1);
+        setConsignment({ ...draftRowRef.current });
+      } else {
+        setHistoryCursor(nextCursor);
+        setConsignment({ ...rows[nextCursor] });
+      }
+      setTimeout(() => focusControlByIndex(columnIndex), 0);
+    }
+  }, [historyCursor, setConsignment, focusControlByIndex]);
+
+  const submitAndMoveNextRow = useCallback(async (columnIndex) => {
+    const payloadSnapshot = { ...consignment };
+    const saved = await onSubmit(undefined, { keepOpen: true });
+    if (!saved) return;
+
+    submittedRowsRef.current = [...submittedRowsRef.current, payloadSnapshot].slice(-100);
+    setHistoryCursor(-1);
+    draftRowRef.current = getEmptyConsignment();
+    setTimeout(() => focusControlByIndex(columnIndex), 0);
+  }, [consignment, onSubmit, focusControlByIndex]);
+
+  const isRequiredComplete = useCallback((row) => {
+    if (!row?.date) return false;
+    if (!row?.user_id) return false;
+    if (!row?.name?.trim()) return false;
+    if (!row?.destination?.trim()) return false;
+    if (!row?.product_name?.trim()) return false;
+    if (!row?.weight || Number(row.weight) <= 0) return false;
+    if (!row?.delivery_partner) return false;
+    if (!row?.service_type) return false;
+    if (!row?.mode) return false;
+    if (row.service_type === 'cargo' && !row?.region) return false;
+    if (row.service_type === 'courier' && !row?.courier_zone) return false;
+    return true;
+  }, []);
+
+  const handleExcelKeyDown = useCallback(async (e) => {
+    if (isEditMode) return;
+    const target = e.target;
+    if (!(target instanceof HTMLElement)) return;
+
+    const isSelect = target.tagName === 'SELECT';
+
+    const { controls, index } = focusActiveControlIndex(target);
+    if (index < 0) return;
+    const isLastControl = index === controls.length - 1;
+
+    const key = e.key;
+
+    if (key === 'ArrowRight') {
+      if (isSelect) return;
+      e.preventDefault();
+      focusControlByIndex(index + 1);
+      return;
+    }
+
+    if (key === 'ArrowLeft') {
+      if (isSelect) return;
+      e.preventDefault();
+      focusControlByIndex(index - 1);
+      return;
+    }
+
+    if (key === 'ArrowUp' || (key === 'Enter' && e.shiftKey)) {
+      if (isSelect && key === 'ArrowUp') return;
+      e.preventDefault();
+      if (historyCursor !== -1) {
+        navigateHistoryRow('up', index);
+      } else {
+        focusControlByIndex(index - 1);
+      }
+      return;
+    }
+
+    if (key === 'ArrowDown') {
+      if (isSelect) return;
+      e.preventDefault();
+      if (historyCursor !== -1) {
+        navigateHistoryRow('down', index);
+      } else {
+        if (isLastControl) {
+          await submitAndMoveNextRow(0);
+        } else {
+          focusControlByIndex(index + 1);
+        }
+      }
+      return;
+    }
+
+    if (key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (isSelect) {
+        focusControlByIndex(index + 1);
+        return;
+      }
+      if (historyCursor !== -1) {
+        navigateHistoryRow('down', index);
+      } else {
+        if (isLastControl) {
+          await submitAndMoveNextRow(0);
+        } else {
+          focusControlByIndex(index + 1);
+        }
+      }
+      return;
+    }
+
+    if (key === 'Tab') {
+      if (historyCursor !== -1) {
+        setHistoryCursor(-1);
+        setConsignment({ ...draftRowRef.current });
+      }
+
+      if (!e.shiftKey && index === controls.length - 1) {
+        e.preventDefault();
+        await submitAndMoveNextRow(0);
+      }
+    }
+  }, [
+    isEditMode,
+    focusActiveControlIndex,
+    focusControlByIndex,
+    navigateHistoryRow,
+    submitAndMoveNextRow,
+    isRequiredComplete,
+    historyCursor,
+    setConsignment,
+  ]);
+
   const handleFieldChange = (field, value) => {
+    if (!isEditMode && historyCursor !== -1) {
+      setHistoryCursor(-1);
+    }
     setConsignment(prev => ({
       ...prev,
       [field]: value,
@@ -761,7 +967,7 @@ function FormModal({
             {!isEditMode && (
               <>
                 <h3 className="section-title">Add Consignment (Excel Sheet Style)</h3>
-                <div className="excel-sheet-wrapper">
+                <div className="excel-sheet-wrapper" ref={excelTableRef} onKeyDown={handleExcelKeyDown}>
                   <table className="excel-sheet-table">
                     <thead>
                       <tr>
