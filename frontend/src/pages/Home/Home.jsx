@@ -553,12 +553,13 @@ export default function Home() {
       name: "Delhivery",
       // Exactly 12 digits (example: 123456789012)
       pattern: /^\d{12}$/i,
-      getUrl: () => "https://www.delhivery.com/tracking",
+      getUrl: (trackingNo) =>
+        `https://www.delhivery.com/track-v2/lr/${encodeURIComponent(trackingNo)}`,
     },
     {
       name: "Movin",
-      // Starts with MVN + digits OR B2B- + digits (example: MVN100023456, B2B-55001234)
-      pattern: /^(MVN\d+|B2B-\d+)$/i,
+      // Starts with MVN + digits OR B2B- + digits OR H + 11 digits (example: MVN100023456, B2B-55001234, H90304577950)
+      pattern: /^(MVN\d+|B2B-\d+|H\d{11})$/i,
       getUrl: (trackingNo) =>
         `https://www.movin.in/track?awb=${encodeURIComponent(trackingNo)}`,
     },
@@ -571,8 +572,8 @@ export default function Home() {
     },
     {
       name: "DTDC",
-      // One letter followed by 9-11 digits (example: D3004118143)
-      pattern: /^[A-Z]\d{9,11}$/i,
+      // One letter followed by 8-11 digits (example: D3004118143)
+      pattern: /^[A-Z]\d{8,11}$/i,
       getUrl: (trackingNo) =>
         `https://www.dtdc.com/track-your-shipment?awb=${encodeURIComponent(trackingNo)}`,
     },
