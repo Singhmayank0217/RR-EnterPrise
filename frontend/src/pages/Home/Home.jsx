@@ -560,8 +560,7 @@ export default function Home() {
       name: "Movin",
       // Starts with MVN + digits OR B2B- + digits OR H + 11 digits (example: MVN100023456, B2B-55001234, H90304577950)
       pattern: /^(MVN\d+|B2B-\d+|H\d{11})$/i,
-      getUrl: (trackingNo) =>
-        `https://www.movin.in/track?awb=${encodeURIComponent(trackingNo)}`,
+      getUrl: () => "https://www.movin.in/shipment/track",
     },
     {
       name: "Rivigo",
