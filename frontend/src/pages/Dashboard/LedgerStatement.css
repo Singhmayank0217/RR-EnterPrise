@@ -1,0 +1,27 @@
+.ledger-page .ledger-filters {
+  padding: 1rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.ledger-page .ledger-filter-actions {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.ledger-page .data-table td:nth-child(3),
+.ledger-page .data-table td:nth-child(4),
+.ledger-page .data-table td:nth-child(5),
+.ledger-page .data-table th:nth-child(3),
+.ledger-page .data-table th:nth-child(4),
+.ledger-page .data-table th:nth-child(5) {
+  text-align: right;
+}
+
+@media (max-width: 768px) {
+  .ledger-page .ledger-filter-actions {
+    flex-wrap: wrap;
+  }
+}

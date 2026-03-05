@@ -82,6 +82,18 @@ export const invoicesAPI = {
   addPayment: (id, paymentData) => api.post(`/invoices/${id}/payment`, paymentData),
   downloadPDF: (id) => api.get(`/invoices/${id}/pdf`, { responseType: 'blob' }),
   downloadExcel: (id) => api.get(`/invoices/${id}/excel`, { responseType: 'blob' }),
+  getLedger: (params = {}) => {
+    const queryParams = new URLSearchParams(params).toString();
+    return api.get(`/invoices/ledger?${queryParams}`);
+  },
+  downloadLedgerPDF: (params = {}) => {
+    const queryParams = new URLSearchParams(params).toString();
+    return api.get(`/invoices/ledger/pdf?${queryParams}`, { responseType: 'blob' });
+  },
+  downloadLedgerExcel: (params = {}) => {
+    const queryParams = new URLSearchParams(params).toString();
+    return api.get(`/invoices/ledger/excel?${queryParams}`, { responseType: 'blob' });
+  },
 };
 
 // Consignments endpoints

@@ -12,6 +12,7 @@ import ConsignmentsPage from './Consignments';
 import PricingRulesPage from './PricingRules';
 import RateCardsPage from './RateCards';
 import ReportsPage from './Reports';
+import LedgerStatementPage from './LedgerStatement';
 import './Dashboard.css';
 
 export default function Dashboard() {
@@ -80,6 +81,11 @@ export default function Dashboard() {
                 <BarChart3 size={20} />
                 <span>Reports</span>
               </NavLink>
+
+              <NavLink to="/dashboard/ledger-statement" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} title="View customer ledger statement with debit/credit balance">
+                <FileText size={20} />
+                <span>Ledger Statement</span>
+              </NavLink>
             </>
           )}
         </nav>
@@ -109,6 +115,7 @@ export default function Dashboard() {
           <Route path="pricing" element={<PricingRulesPage />} />
           <Route path="rate-cards" element={<RateCardsPage />} />
           <Route path="reports" element={<ReportsPage />} />
+          <Route path="ledger-statement" element={<LedgerStatementPage />} />
         </Routes>
       </main>
     </div>
