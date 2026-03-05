@@ -651,7 +651,7 @@ export default function Home() {
               <div style={styles.navLogo}>
                 <Package size={20} />
               </div>
-              <span>RR Enterprise</span>
+              <span>RR Enterprises</span>
             </div>
 
             {/* Desktop Navigation */}
@@ -1148,7 +1148,7 @@ export default function Home() {
                   marginBottom: "16px",
                 }}
               >
-                Why RR Enterprise
+                Why RR Enterprises
               </h2>
               <p style={{ fontSize: "18px", color: "#9ca3af" }}>
                 Refined processes that prioritize security and transparency
@@ -1591,7 +1591,7 @@ export default function Home() {
                   name: "Rahul Sharma",
                   role: "E-commerce Owner, Delhi",
                   quote:
-                    "RR Enterprise has transformed our logistics. Their tracking system is excellent and deliveries are always on time. Highly recommended!",
+                    "RR Enterprises has transformed our logistics. Their tracking system is excellent and deliveries are always on time. Highly recommended!",
                 },
                 {
                   name: "Priya Mehta",
@@ -1603,7 +1603,7 @@ export default function Home() {
                   name: "Amit Kumar",
                   role: "Retailer, Bangalore",
                   quote:
-                    "Reliable service with competitive pricing. We've reduced our logistics costs by 30% since switching to RR Enterprise.",
+                    "Reliable service with competitive pricing. We've reduced our logistics costs by 30% since switching to RR Enterprises.",
                 },
               ].map((testimonial, idx) => (
                 <div
@@ -1862,7 +1862,7 @@ export default function Home() {
               }}
             >
               <p style={{ margin: "0" }}>
-                © 2026 RR Enterprise. All rights reserved.
+                © 2026 RR Enterprises. All rights reserved.
               </p>
             </div>
           </div>

@@ -6,6 +6,7 @@ from ..database import db_helper
 from ..models.rate_card import (
     RateCardCreate, RateCardResponse, RateCardUpdate,
     RateCardFetchRequest, RateCardFetchResponse,
+    BulkRateCardCreate, BulkRateCardCreateResponse,
     ServiceType, TransportMode, CargoRegion, CourierZone,
     DELIVERY_PARTNERS
 )
@@ -13,6 +14,49 @@ from ..models.user import TokenData
 from ..utils.auth import require_admin, require_master_admin
 
 router = APIRouter(prefix="/api/rate-cards", tags=["Rate Cards"])
+
+
+def _build_uniqueness_query(
+    user_id: str,
+    delivery_partner: str,
+    service_type: ServiceType,
+    mode: TransportMode,
+    region: Optional[str] = None,
+    zone: Optional[str] = None,
+):
+    query = {
+        "user_id": user_id,
+        "delivery_partner": delivery_partner,
+        "service_type": service_type.value,
+        "mode": mode.value,
+    }
+
+    if region:
+        query["region"] = region
+    if zone:
+        query["zone"] = zone
+
+    return query
+
+
+def _validate_service_specific_fields(
+    service_type: ServiceType,
+    region: Optional[str],
+    zone: Optional[str],
+    row_index: Optional[int] = None,
+):
+    row_prefix = f"Row {row_index}: " if row_index is not None else ""
+
+    if service_type == ServiceType.CARGO and not region:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{row_prefix}Region is required for Cargo service type"
+        )
+    if service_type == ServiceType.COURIER and not zone:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{row_prefix}Zone is required for Courier service type"
+        )
 
 
 @router.get("/config")
@@ -51,29 +95,21 @@ async def create_rate_card(
     """Create a new rate card (Admin only)."""
     db = db_helper.db
     
-    # Validate service type specific fields
-    if rate_card.service_type == ServiceType.CARGO and not rate_card.region:
-        raise HTTPException(
-            status_code=400,
-            detail="Region is required for Cargo service type"
-        )
-    if rate_card.service_type == ServiceType.COURIER and not rate_card.zone:
-        raise HTTPException(
-            status_code=400,
-            detail="Zone is required for Courier service type"
-        )
+    _validate_service_specific_fields(
+        service_type=rate_card.service_type,
+        region=rate_card.region,
+        zone=rate_card.zone,
+    )
     
     # Check for duplicate rate card
-    query = {
-        "user_id": rate_card.user_id,
-        "delivery_partner": rate_card.delivery_partner,
-        "service_type": rate_card.service_type.value,
-        "mode": rate_card.mode.value,
-    }
-    if rate_card.region:
-        query["region"] = rate_card.region
-    if rate_card.zone:
-        query["zone"] = rate_card.zone
+    query = _build_uniqueness_query(
+        user_id=rate_card.user_id,
+        delivery_partner=rate_card.delivery_partner,
+        service_type=rate_card.service_type,
+        mode=rate_card.mode,
+        region=rate_card.region,
+        zone=rate_card.zone,
+    )
     
     existing = await db.rate_cards.find_one(query)
     if existing:
@@ -100,6 +136,103 @@ async def create_rate_card(
     rate_card_dict["_id"] = str(result.inserted_id)
     
     return RateCardResponse(**rate_card_dict)
+
+
+@router.post("/bulk", response_model=BulkRateCardCreateResponse)
+async def create_rate_cards_bulk(
+    payload: BulkRateCardCreate,
+    token_data: TokenData = Depends(require_admin)
+):
+    """Create multiple rate cards in one request (Admin only)."""
+    db = db_helper.db
+
+    documents_to_insert = []
+    unique_keys_in_payload = set()
+    now = datetime.utcnow()
+
+    for index, row in enumerate(payload.rate_cards, start=1):
+        _validate_service_specific_fields(
+            service_type=payload.service_type,
+            region=row.region,
+            zone=row.zone,
+            row_index=index,
+        )
+
+        if row.base_rate <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Row {index}: Base rate must be greater than 0"
+            )
+
+        if row.fov < 0 or row.fov > 1:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Row {index}: FOV must be between 0 and 1"
+            )
+
+        uniqueness_key = (
+            payload.user_id,
+            payload.delivery_partner,
+            payload.service_type.value,
+            payload.mode.value,
+            row.region or "",
+            row.zone or "",
+        )
+        if uniqueness_key in unique_keys_in_payload:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Row {index}: Duplicate region/zone entry found in this batch"
+            )
+        unique_keys_in_payload.add(uniqueness_key)
+
+        query = _build_uniqueness_query(
+            user_id=payload.user_id,
+            delivery_partner=payload.delivery_partner,
+            service_type=payload.service_type,
+            mode=payload.mode,
+            region=row.region,
+            zone=row.zone,
+        )
+        existing = await db.rate_cards.find_one(query)
+        if existing:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Row {index}: A rate card with the same criteria already exists"
+            )
+
+        documents_to_insert.append({
+            "user_id": payload.user_id,
+            "user_name": payload.user_name,
+            "delivery_partner": payload.delivery_partner,
+            "service_type": payload.service_type.value,
+            "mode": payload.mode.value,
+            "region": row.region if payload.service_type == ServiceType.CARGO else None,
+            "zone": row.zone if payload.service_type == ServiceType.COURIER else None,
+            "base_rate": row.base_rate,
+            "docket_charge": row.docket_charge,
+            "fov": row.fov,
+            "fuel_charge": row.fuel_charge,
+            "gst": row.gst,
+            "odi": row.odi,
+            "is_active": payload.is_active,
+            "created_at": now,
+            "updated_at": now,
+            "created_by": token_data.user_id,
+        })
+
+    insert_result = await db.rate_cards.insert_many(documents_to_insert)
+    created_ids = insert_result.inserted_ids
+
+    created_cursor = db.rate_cards.find({"_id": {"$in": created_ids}})
+    created_docs = []
+    async for doc in created_cursor:
+        doc["_id"] = str(doc["_id"])
+        created_docs.append(RateCardResponse(**doc))
+
+    return BulkRateCardCreateResponse(
+        created_count=len(created_docs),
+        rate_cards=created_docs
+    )
 
 
 @router.get("/", response_model=List[RateCardResponse])

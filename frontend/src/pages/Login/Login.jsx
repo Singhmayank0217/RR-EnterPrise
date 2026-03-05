@@ -60,7 +60,7 @@ export default function Login() {
         <div className="login-branding">
           <Link to="/" className="logo">
             <Package size={40} />
-            <span>RR Enterprise</span>
+            <span>RR Enterprises</span>
           </Link>
           <h1>{isLogin ? 'Welcome Back' : 'Create Account'}</h1>
           <p>

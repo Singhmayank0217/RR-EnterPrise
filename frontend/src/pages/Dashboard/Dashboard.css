@@ -378,6 +378,77 @@
   color: var(--text-dark);
 }
 
+.bulk-rate-table td {
+  vertical-align: top;
+}
+
+.bulk-rate-table-wrap {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.bulk-rate-table {
+  min-width: 1100px;
+  table-layout: fixed;
+}
+
+.bulk-rate-table th,
+.bulk-rate-table td {
+  padding: 0.75rem 0.6rem;
+}
+
+.bulk-rate-table th {
+  white-space: nowrap;
+}
+
+.bulk-rate-table input,
+.bulk-rate-table select {
+  min-width: 100%;
+  width: 100%;
+  height: 38px;
+  padding: 0.45rem 0.55rem;
+  box-sizing: border-box;
+}
+
+.bulk-rate-table .actions-cell {
+  min-width: 90px;
+  justify-content: flex-start;
+}
+
+.bulk-rate-table .action-btn {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.bulk-rate-row {
+  animation: bulkRowEnter 0.2s ease;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.bulk-rate-row.is-removing {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+.bulk-row-error {
+  display: block;
+  margin-top: 0.25rem;
+  color: #dc2626;
+  font-size: 0.72rem;
+}
+
+@keyframes bulkRowEnter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* Status Badges */
 .status-badge {
   display: inline-flex;

@@ -70,6 +70,27 @@ class RateCardCreate(RateCardBase):
     pass
 
 
+class BulkRateCardItem(BaseModel):
+    region: Optional[str] = None
+    zone: Optional[str] = None
+    base_rate: float = 0
+    docket_charge: float = 0
+    fov: float = 0
+    fuel_charge: float = 0
+    gst: float = 18.0
+    odi: float = 0
+
+
+class BulkRateCardCreate(BaseModel):
+    user_id: str
+    user_name: str
+    delivery_partner: str
+    service_type: ServiceType
+    mode: TransportMode
+    is_active: bool = True
+    rate_cards: List[BulkRateCardItem] = Field(default_factory=list, min_length=2, max_length=10)
+
+
 class RateCardUpdate(BaseModel):
     user_id: Optional[str] = None
     user_name: Optional[str] = None
@@ -121,3 +142,8 @@ class RateCardFetchResponse(BaseModel):
     found: bool
     rate_card: Optional[RateCardResponse] = None
     message: str = ""
+
+
+class BulkRateCardCreateResponse(BaseModel):
+    created_count: int
+    rate_cards: List[RateCardResponse]

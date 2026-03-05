@@ -396,19 +396,96 @@ function Consignments() {
     setShowAddModal(true);
   };
 
+  const parseBoxDimensions = (rawDimensions) => {
+    if (!rawDimensions) return null;
+
+    const raw = String(rawDimensions).trim().toLowerCase();
+    if (!raw) return null;
+
+    const unit = (raw.includes('in') || raw.includes('"')) ? 'in' : 'cm';
+    const cleaned = raw.replace(/[^0-9x*.]+/g, '').replace(/x/g, '*');
+    const parts = cleaned.split('*').filter(Boolean);
+    if (parts.length < 3) return null;
+
+    const length = parseFloat(parts[0]);
+    const width = parseFloat(parts[1]);
+    const height = parseFloat(parts[2]);
+
+    if (!Number.isFinite(length) || !Number.isFinite(width) || !Number.isFinite(height)) {
+      return null;
+    }
+    if (length <= 0 || width <= 0 || height <= 0) {
+      return null;
+    }
+
+    return { length, width, height, unit };
+  };
+
+  const getChargeableWeight = (consignment) => {
+    const actualWeight = parseFloat(consignment.weight || 0) || 0;
+    const serviceType = (consignment.service_type || '').toLowerCase();
+    const mode = (consignment.mode || '').toLowerCase();
+
+    const boxes = [
+      consignment.box1_dimensions,
+      consignment.box2_dimensions,
+      consignment.box3_dimensions,
+    ];
+
+    let totalCm3 = 0;
+    let totalCft = 0;
+    let hasDimensions = false;
+
+    boxes.forEach((box) => {
+      const parsed = parseBoxDimensions(box);
+      if (!parsed) return;
+
+      hasDimensions = true;
+      const { length, width, height, unit } = parsed;
+
+      if (unit === 'in') {
+        const volumeIn3 = length * width * height;
+        totalCft += volumeIn3 / 1728;
+        totalCm3 += volumeIn3 * 16.387064;
+      } else {
+        const volumeCm3 = length * width * height;
+        totalCm3 += volumeCm3;
+        totalCft += volumeCm3 / 28316.846592;
+      }
+    });
+
+    let divisor = 4500;
+    if (serviceType === 'cargo') {
+      divisor = totalCft > 10 ? 2700 : 4500;
+    } else if (mode === 'air') {
+      divisor = 5000;
+    }
+
+    const volumetricWeight = totalCm3 > 0 ? totalCm3 / divisor : 0;
+    return {
+      chargeableWeight: Math.max(actualWeight, volumetricWeight),
+      hasDimensions,
+    };
+  };
+
   // Calculate total
   const calculateTotal = (consignment) => {
-    const baseAmount = 
-      parseFloat(consignment.base_rate || 0) +
-      parseFloat(consignment.docket_charges || 0) +
-      parseFloat(consignment.oda_charge || 0);
-    
-    const fovValue = parseFloat(consignment.fov || 0);
-    const fuelChargeAmount = baseAmount * (parseFloat(consignment.fuel_charge || 0) / 100);
-    const subtotal = baseAmount + fovValue + fuelChargeAmount;
-    const gstAmount = subtotal * (parseFloat(consignment.gst || 0) / 100);
-    
-    return subtotal + gstAmount;
+    const baseRate = parseFloat(consignment.base_rate || 0) || 0;
+    const docketCharges = parseFloat(consignment.docket_charges || 0) || 0;
+    const odaCharge = parseFloat(consignment.oda_charge || 0) || 0;
+    const fovValue = parseFloat(consignment.fov || 0) || 0;
+    const fuelChargePercent = parseFloat(consignment.fuel_charge || 0) || 0;
+    const gstPercent = parseFloat(consignment.gst || 0) || 0;
+
+    const { chargeableWeight, hasDimensions } = getChargeableWeight(consignment);
+    const baseAmount = hasDimensions ? (baseRate * chargeableWeight) : baseRate;
+
+    const subtotal = baseAmount + docketCharges + odaCharge + fovValue;
+    const fuelChargeAmount = subtotal * (fuelChargePercent / 100);
+    const subtotalWithFuel = subtotal + fuelChargeAmount;
+    const gstAmount = subtotalWithFuel * (gstPercent / 100);
+
+    return subtotalWithFuel + gstAmount;
   };
 
   // Export Excel

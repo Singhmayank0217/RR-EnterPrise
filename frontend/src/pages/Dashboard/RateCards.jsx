@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { CreditCard, Plus, Edit, Trash2, X, Check, AlertCircle, ToggleLeft, ToggleRight, Filter } from 'lucide-react';
+import { CreditCard, Plus, Edit, Trash2, X, Check, AlertCircle, ToggleLeft, ToggleRight, Filter, Copy } from 'lucide-react';
 import { rateCardsAPI, authAPI } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -39,14 +39,28 @@ const COURIER_ZONES = [
 const DELIVERY_PARTNERS = [
   'DTDC',
   'Delhivery',
-  'BlueDart',
-  'FedEx',
+  'Movin.in',
+  'Rivigo',
   'DHL',
   'Ecom Express',
   'Xpressbees',
   'Shadowfax',
   'Other'
 ];
+
+const MAX_BULK_ROWS = 10;
+
+const createRateCardRow = (seed = {}) => ({
+  id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  region: seed.region ?? '',
+  zone: seed.zone ?? '',
+  base_rate: seed.base_rate ?? '',
+  docket_charge: seed.docket_charge ?? '',
+  fov: seed.fov ?? '',
+  fuel_charge: seed.fuel_charge ?? '',
+  gst: seed.gst ?? '18',
+  odi: seed.odi ?? ''
+});
 
 export default function RateCardsPage() {
   const { isMasterAdmin, isAdmin } = useAuth();
@@ -368,14 +382,18 @@ export default function RateCardsPage() {
 
 function RateCardModal({ card, users, onClose, onSuccess }) {
   const toast = useToast();
+  const isEditMode = !!card?._id;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [rowErrors, setRowErrors] = useState({});
+  const [removingRowId, setRemovingRowId] = useState('');
   const [formData, setFormData] = useState({
     user_id: card?.user_id || '',
     user_name: card?.user_name || '',
     delivery_partner: card?.delivery_partner || 'DTDC',
     service_type: card?.service_type || 'cargo',
     mode: card?.mode || 'surface',
+    is_active: card?.is_active !== undefined ? card.is_active : true,
     region: card?.region || '',
     zone: card?.zone || '',
     base_rate: card?.base_rate || 0,
@@ -383,9 +401,22 @@ function RateCardModal({ card, users, onClose, onSuccess }) {
     fov: card?.fov || 0,
     fuel_charge: card?.fuel_charge || 0,
     gst: card?.gst || 18,
-    odi: card?.odi || 0,
-    is_active: card?.is_active !== undefined ? card.is_active : true
+    odi: card?.odi || 0
   });
+  const [rateCardRows, setRateCardRows] = useState(() => {
+    if (isEditMode) return [];
+    return [createRateCardRow(), createRateCardRow()];
+  });
+
+  const locationLabel = formData.service_type === 'courier' ? 'Zone' : 'Region';
+  const locationField = formData.service_type === 'courier' ? 'zone' : 'region';
+  const locationOptions = formData.service_type === 'courier' ? COURIER_ZONES : CARGO_REGIONS;
+
+  const nonEmptyRowsCount = rateCardRows.filter((row) => {
+    const locationValue = String(row[locationField] || '').trim();
+    const baseRateValue = String(row.base_rate || '').trim();
+    return locationValue !== '' || baseRateValue !== '';
+  }).length;
 
   const handleUserChange = (e) => {
     const selectedUser = users.find(u => u._id === e.target.value);
@@ -404,6 +435,143 @@ function RateCardModal({ card, users, onClose, onSuccess }) {
       region: newType === 'cargo' ? (formData.region || 'north') : '',
       zone: newType === 'courier' ? (formData.zone || 'zone_1') : ''
     });
+
+    if (!isEditMode) {
+      setRateCardRows((prevRows) => prevRows.map((row) => ({
+        ...row,
+        region: newType === 'cargo' ? row.region : '',
+        zone: newType === 'courier' ? row.zone : ''
+      })));
+      setRowErrors({});
+    }
+  };
+
+  const handleRowChange = (rowId, key, value) => {
+    setRateCardRows((prevRows) => prevRows.map((row) => (
+      row.id === rowId ? { ...row, [key]: value } : row
+    )));
+
+    setRowErrors((prev) => {
+      if (!prev[rowId]) return prev;
+      const { [key]: _unused, ...restForRow } = prev[rowId];
+      if (Object.keys(restForRow).length === 0) {
+        const { [rowId]: _dropRow, ...restRows } = prev;
+        return restRows;
+      }
+      return { ...prev, [rowId]: restForRow };
+    });
+  };
+
+  const handleAddRow = () => {
+    if (rateCardRows.length >= MAX_BULK_ROWS) {
+      toast.error('Maximum 10 rows allowed in one submission');
+      return;
+    }
+
+    const previousRow = rateCardRows[rateCardRows.length - 1] || createRateCardRow();
+    const newRow = createRateCardRow({
+      ...previousRow,
+      region: '',
+      zone: ''
+    });
+    setRateCardRows((prevRows) => [...prevRows, newRow]);
+  };
+
+  const handleDuplicateRow = (rowId) => {
+    if (rateCardRows.length >= MAX_BULK_ROWS) {
+      toast.error('Maximum 10 rows allowed in one submission');
+      return;
+    }
+
+    const sourceRow = rateCardRows.find((row) => row.id === rowId);
+    if (!sourceRow) return;
+
+    const duplicated = createRateCardRow({ ...sourceRow });
+    setRateCardRows((prevRows) => {
+      const sourceIndex = prevRows.findIndex((row) => row.id === rowId);
+      const next = [...prevRows];
+      next.splice(sourceIndex + 1, 0, duplicated);
+      return next;
+    });
+  };
+
+  const handleDeleteRow = (rowId) => {
+    if (rateCardRows.length <= 1) {
+      toast.error('At least one row must remain in the table');
+      return;
+    }
+
+    setRemovingRowId(rowId);
+    setTimeout(() => {
+      setRateCardRows((prevRows) => prevRows.filter((row) => row.id !== rowId));
+      setRowErrors((prev) => {
+        const { [rowId]: _removed, ...rest } = prev;
+        return rest;
+      });
+      setRemovingRowId('');
+    }, 180);
+  };
+
+  const handleBulkFieldKeyDown = (e) => {
+    if (e.key !== 'Enter') return;
+
+    e.preventDefault();
+    const form = e.currentTarget.form;
+    if (!form) return;
+
+    const navigable = Array.from(form.querySelectorAll('[data-bulk-nav="true"]:not(:disabled)'));
+    const currentIndex = navigable.indexOf(e.currentTarget);
+    if (currentIndex >= 0 && currentIndex < navigable.length - 1) {
+      navigable[currentIndex + 1].focus();
+    }
+  };
+
+  const validateBulkRows = () => {
+    const nextErrors = {};
+    const validRows = [];
+
+    rateCardRows.forEach((row) => {
+      const locationValue = String(row[locationField] || '').trim();
+      const baseRateValue = String(row.base_rate || '').trim();
+      const isEmpty = locationValue === '' && baseRateValue === '';
+
+      if (isEmpty) {
+        return;
+      }
+
+      const thisRowErrors = {};
+      if (!locationValue && formData.service_type !== 'other') {
+        thisRowErrors[locationField] = `${locationLabel} is required`;
+      }
+
+      const parsedBaseRate = parseFloat(baseRateValue);
+      if (baseRateValue === '' || Number.isNaN(parsedBaseRate) || parsedBaseRate <= 0) {
+        thisRowErrors.base_rate = 'Base rate is required';
+      }
+
+      const parsedFov = parseFloat(String(row.fov || '0'));
+      if (!Number.isNaN(parsedFov) && (parsedFov < 0 || parsedFov > 1)) {
+        thisRowErrors.fov = 'FOV must be between 0 and 1';
+      }
+
+      if (Object.keys(thisRowErrors).length > 0) {
+        nextErrors[row.id] = thisRowErrors;
+      } else {
+        validRows.push({
+          region: formData.service_type === 'cargo' ? locationValue : null,
+          zone: formData.service_type === 'courier' ? locationValue : null,
+          base_rate: parsedBaseRate,
+          docket_charge: parseFloat(String(row.docket_charge || '0')) || 0,
+          fov: parseFloat(String(row.fov || '0')) || 0,
+          fuel_charge: parseFloat(String(row.fuel_charge || '0')) || 0,
+          gst: parseFloat(String(row.gst || '0')) || 0,
+          odi: parseFloat(String(row.odi || '0')) || 0,
+        });
+      }
+    });
+
+    setRowErrors(nextErrors);
+    return validRows;
   };
 
   const handleSubmit = async (e) => {
@@ -415,6 +583,37 @@ function RateCardModal({ card, users, onClose, onSuccess }) {
     if (!formData.user_id) {
       setError('Please select a user');
       setLoading(false);
+      return;
+    }
+
+    if (!isEditMode) {
+      const validRows = validateBulkRows();
+
+      if (validRows.length < 2) {
+        setError('Please add at least 2 valid rate card rows');
+        setLoading(false);
+        return;
+      }
+
+      try {
+        await rateCardsAPI.createBulk({
+          user_id: formData.user_id,
+          user_name: formData.user_name,
+          delivery_partner: formData.delivery_partner,
+          service_type: formData.service_type,
+          mode: formData.mode,
+          is_active: formData.is_active,
+          rate_cards: validRows,
+        });
+
+        toast.success(`${validRows.length} rate cards created successfully`);
+        onSuccess();
+        onClose();
+      } catch (err) {
+        setError(err.response?.data?.detail || 'Failed to create rate cards');
+      } finally {
+        setLoading(false);
+      }
       return;
     }
 
@@ -534,7 +733,7 @@ function RateCardModal({ card, users, onClose, onSuccess }) {
                 </select>
               </div>
 
-              {formData.service_type === 'cargo' && (
+              {isEditMode && formData.service_type === 'cargo' && (
                 <div className="form-group">
                   <label>Region *</label>
                   <select 
@@ -550,7 +749,7 @@ function RateCardModal({ card, users, onClose, onSuccess }) {
                 </div>
               )}
 
-              {formData.service_type === 'courier' && (
+              {isEditMode && formData.service_type === 'courier' && (
                 <div className="form-group">
                   <label>Zone *</label>
                   <select 
@@ -567,81 +766,234 @@ function RateCardModal({ card, users, onClose, onSuccess }) {
               )}
             </div>
 
-            <h3 className="section-title">Charges</h3>
-            <div className="form-row">
-              <div className="form-group">
-                <label>Base Rate (₹)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={formData.base_rate}
-                  onChange={(e) => setFormData({ ...formData, base_rate: parseFloat(e.target.value) || 0 })}
-                  required
-                />
-              </div>
+            {isEditMode ? (
+              <>
+                <h3 className="section-title">Charges</h3>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Base Rate (₹)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={formData.base_rate}
+                      onChange={(e) => setFormData({ ...formData, base_rate: parseFloat(e.target.value) || 0 })}
+                      required
+                    />
+                  </div>
 
-              <div className="form-group">
-                <label>Docket Charge (₹)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={formData.docket_charge}
-                  onChange={(e) => setFormData({ ...formData, docket_charge: parseFloat(e.target.value) || 0 })}
-                />
-              </div>
+                  <div className="form-group">
+                    <label>Docket Charge (₹)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={formData.docket_charge}
+                      onChange={(e) => setFormData({ ...formData, docket_charge: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
 
-              <div className="form-group">
-                <label>FOV (0.1 - 0.8)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  max="1"
-                  value={formData.fov}
-                  onChange={(e) => setFormData({ ...formData, fov: parseFloat(e.target.value) || 0 })}
-                  placeholder="e.g., 0.5"
-                />
-              </div>
-            </div>
+                  <div className="form-group">
+                    <label>FOV (0.1 - 0.8)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      max="1"
+                      value={formData.fov}
+                      onChange={(e) => setFormData({ ...formData, fov: parseFloat(e.target.value) || 0 })}
+                      placeholder="e.g., 0.5"
+                    />
+                  </div>
+                </div>
 
-            <div className="form-row">
-              <div className="form-group">
-                <label>Fuel Charge (%)</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  max="100"
-                  value={formData.fuel_charge}
-                  onChange={(e) => setFormData({ ...formData, fuel_charge: parseFloat(e.target.value) || 0 })}
-                />
-              </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Fuel Charge (%)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="100"
+                      value={formData.fuel_charge}
+                      onChange={(e) => setFormData({ ...formData, fuel_charge: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
 
-              <div className="form-group">
-                <label>GST (%)</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  max="100"
-                  value={formData.gst}
-                  onChange={(e) => setFormData({ ...formData, gst: parseFloat(e.target.value) || 0 })}
-                />
-              </div>
+                  <div className="form-group">
+                    <label>GST (%)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="100"
+                      value={formData.gst}
+                      onChange={(e) => setFormData({ ...formData, gst: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
 
-              <div className="form-group">
-                <label>ODI Charge (₹)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={formData.odi}
-                  onChange={(e) => setFormData({ ...formData, odi: parseFloat(e.target.value) || 0 })}
-                />
-              </div>
-            </div>
+                  <div className="form-group">
+                    <label>ODI Charge (₹)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={formData.odi}
+                      onChange={(e) => setFormData({ ...formData, odi: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <h3 className="section-title">Rate Cards ({nonEmptyRowsCount} ready)</h3>
+                <div className="bulk-rate-table-wrap" style={{ overflowX: 'auto' }}>
+                  <table className="data-table bulk-rate-table">
+                    <thead>
+                      <tr>
+                        <th>{locationLabel}</th>
+                        <th>Base Rate</th>
+                        <th>Docket Charge</th>
+                        <th>FOV</th>
+                        <th>Fuel Charge</th>
+                        <th>GST</th>
+                        <th>ODI Charge</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rateCardRows.map((row) => (
+                        <tr key={row.id} className={`bulk-rate-row ${removingRowId === row.id ? 'is-removing' : ''}`}>
+                          <td>
+                            {formData.service_type === 'other' ? (
+                              <span style={{ color: '#64748b' }}>-</span>
+                            ) : (
+                              <>
+                                <select
+                                  value={row[locationField]}
+                                  onChange={(e) => handleRowChange(row.id, locationField, e.target.value)}
+                                  data-bulk-nav="true"
+                                  onKeyDown={handleBulkFieldKeyDown}
+                                >
+                                  <option value="">Select {locationLabel}</option>
+                                  {locationOptions.map((opt) => (
+                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                  ))}
+                                </select>
+                                {rowErrors[row.id]?.[locationField] && (
+                                  <small className="bulk-row-error">{rowErrors[row.id][locationField]}</small>
+                                )}
+                              </>
+                            )}
+                          </td>
+                          <td>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={row.base_rate}
+                              onChange={(e) => handleRowChange(row.id, 'base_rate', e.target.value)}
+                              data-bulk-nav="true"
+                              onKeyDown={handleBulkFieldKeyDown}
+                            />
+                            {rowErrors[row.id]?.base_rate && (
+                              <small className="bulk-row-error">{rowErrors[row.id].base_rate}</small>
+                            )}
+                          </td>
+                          <td>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={row.docket_charge}
+                              onChange={(e) => handleRowChange(row.id, 'docket_charge', e.target.value)}
+                              data-bulk-nav="true"
+                              onKeyDown={handleBulkFieldKeyDown}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              max="1"
+                              value={row.fov}
+                              onChange={(e) => handleRowChange(row.id, 'fov', e.target.value)}
+                              data-bulk-nav="true"
+                              onKeyDown={handleBulkFieldKeyDown}
+                            />
+                            {rowErrors[row.id]?.fov && (
+                              <small className="bulk-row-error">{rowErrors[row.id].fov}</small>
+                            )}
+                          </td>
+                          <td>
+                            <input
+                              type="number"
+                              step="0.1"
+                              min="0"
+                              max="100"
+                              value={row.fuel_charge}
+                              onChange={(e) => handleRowChange(row.id, 'fuel_charge', e.target.value)}
+                              data-bulk-nav="true"
+                              onKeyDown={handleBulkFieldKeyDown}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="number"
+                              step="0.1"
+                              min="0"
+                              max="100"
+                              value={row.gst}
+                              onChange={(e) => handleRowChange(row.id, 'gst', e.target.value)}
+                              data-bulk-nav="true"
+                              onKeyDown={handleBulkFieldKeyDown}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={row.odi}
+                              onChange={(e) => handleRowChange(row.id, 'odi', e.target.value)}
+                              data-bulk-nav="true"
+                              onKeyDown={handleBulkFieldKeyDown}
+                            />
+                          </td>
+                          <td className="actions-cell">
+                            <button
+                              type="button"
+                              className="action-btn"
+                              title="Duplicate row"
+                              onClick={() => handleDuplicateRow(row.id)}
+                            >
+                              <Copy size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              className="action-btn"
+                              title="Delete row"
+                              onClick={() => handleDeleteRow(row.id)}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.75rem' }}>
+                  <small style={{ color: '#64748b' }}>You can submit 2 to 10 rows in one request. Empty rows are ignored.</small>
+                  <button type="button" className="btn btn-secondary" onClick={handleAddRow}>
+                    <Plus size={16} />
+                    Add Rate Card Row
+                  </button>
+                </div>
+              </>
+            )}
 
             <div className="form-row">
               <div className="form-group">
@@ -659,7 +1011,7 @@ function RateCardModal({ card, users, onClose, onSuccess }) {
           <div className="modal-footer">
             <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
             <button type="submit" className="btn btn-primary" disabled={loading}>
-              {loading ? 'Saving...' : (card ? 'Update Rate Card' : 'Create Rate Card')}
+              {loading ? 'Saving...' : (card ? 'Update Rate Card' : 'Create Rate Cards')}
             </button>
           </div>
         </form>

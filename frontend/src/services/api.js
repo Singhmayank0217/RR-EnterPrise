@@ -106,6 +106,7 @@ export const consignmentsAPI = {
 // Rate Cards endpoints
 export const rateCardsAPI = {
   create: (data) => api.post('/rate-cards/', data),
+  createBulk: (data) => api.post('/rate-cards/bulk', data),
   list: (params = {}) => {
     const queryParams = new URLSearchParams(params).toString();
     return api.get(`/rate-cards/?${queryParams}`);

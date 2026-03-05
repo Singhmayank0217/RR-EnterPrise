@@ -157,7 +157,7 @@ async def track_shipment(tracking_number: str):
             tracking_number=consignment.get("consignment_no", tracking_number),
             status=ShipmentStatus.PENDING,
             origin={
-                "name": "RR Enterprise",
+                "name": "RR Enterprises",
                 "phone": "",
                 "address_line1": "Regional Office",
                 "city": "Origin",

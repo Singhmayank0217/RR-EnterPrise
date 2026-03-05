@@ -4,6 +4,7 @@ from typing import List, Optional, Dict
 from bson import ObjectId
 from datetime import datetime, date, timedelta
 from io import BytesIO
+import re
 import pandas as pd
 from ..database import db_helper
 from ..models.consignment import (
@@ -16,6 +17,134 @@ from ..utils.auth import require_admin
 from ..utils.helpers import generate_invoice_number
 
 router = APIRouter(prefix="/api/consignments", tags=["Consignments"])
+
+
+def _safe_float(value, default: float = 0.0) -> float:
+    try:
+        if value is None:
+            return default
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _parse_box_dimensions(dimensions: Optional[str]) -> Optional[Dict[str, float]]:
+    if not dimensions:
+        return None
+
+    raw = str(dimensions).strip().lower()
+    if not raw:
+        return None
+
+    unit = "in" if ("in" in raw or '"' in raw) else "cm"
+    cleaned = re.sub(r"[^0-9x*\.]+", "", raw)
+    cleaned = cleaned.replace("x", "*")
+    parts = [p for p in cleaned.split("*") if p]
+
+    if len(parts) < 3:
+        return None
+
+    try:
+        length = float(parts[0])
+        width = float(parts[1])
+        height = float(parts[2])
+    except ValueError:
+        return None
+
+    if length <= 0 or width <= 0 or height <= 0:
+        return None
+
+    return {
+        "length": length,
+        "width": width,
+        "height": height,
+        "unit": unit,
+    }
+
+
+def _calculate_chargeable_weight(consignment_data: Dict) -> Dict[str, float]:
+    weight_kg = _safe_float(consignment_data.get("weight"), 0.0)
+    service_type = str(consignment_data.get("service_type") or "").lower()
+    mode = str(consignment_data.get("mode") or "").lower()
+
+    box_fields = [
+        consignment_data.get("box1_dimensions"),
+        consignment_data.get("box2_dimensions"),
+        consignment_data.get("box3_dimensions"),
+    ]
+
+    total_cm3 = 0.0
+    total_cft = 0.0
+    has_dimensions = False
+
+    for raw_dim in box_fields:
+        parsed = _parse_box_dimensions(raw_dim)
+        if not parsed:
+            continue
+
+        has_dimensions = True
+        length = parsed["length"]
+        width = parsed["width"]
+        height = parsed["height"]
+
+        if parsed["unit"] == "in":
+            volume_in3 = length * width * height
+            total_cft += volume_in3 / 1728.0
+            total_cm3 += volume_in3 * 16.387064
+        else:
+            volume_cm3 = length * width * height
+            total_cm3 += volume_cm3
+            total_cft += volume_cm3 / 28316.846592
+
+    divisor = 4500.0
+    if service_type == "cargo":
+        if total_cft > 10:
+            divisor = 2700.0
+        else:
+            divisor = 4500.0
+    elif mode == "air":
+        divisor = 5000.0
+
+    volumetric_weight = (total_cm3 / divisor) if total_cm3 > 0 else 0.0
+    chargeable_weight = max(weight_kg, volumetric_weight)
+
+    return {
+        "weight_kg": weight_kg,
+        "volumetric_weight": volumetric_weight,
+        "chargeable_weight": chargeable_weight,
+        "has_dimensions": has_dimensions,
+        "total_cft": total_cft,
+    }
+
+
+def _calculate_financials(consignment_data: Dict) -> Dict[str, float]:
+    base_rate = _safe_float(consignment_data.get("base_rate"), 0.0)
+    docket_charges = _safe_float(consignment_data.get("docket_charges"), 0.0)
+    oda_charge = _safe_float(consignment_data.get("oda_charge"), 0.0)
+    fov = _safe_float(consignment_data.get("fov"), 0.0)
+    fuel_charge_percent = _safe_float(consignment_data.get("fuel_charge"), 0.0)
+    gst_percent = _safe_float(consignment_data.get("gst"), 0.0)
+
+    weight_details = _calculate_chargeable_weight(consignment_data)
+    has_dimensions = weight_details["has_dimensions"]
+    chargeable_weight = weight_details["chargeable_weight"]
+
+    base_amount = (base_rate * chargeable_weight) if has_dimensions else base_rate
+
+    subtotal = base_amount + docket_charges + oda_charge + fov
+    fuel_amount = subtotal * (fuel_charge_percent / 100.0) if fuel_charge_percent else 0.0
+    subtotal_with_fuel = subtotal + fuel_amount
+    gst_amount = subtotal_with_fuel * (gst_percent / 100.0)
+    total_amount = subtotal_with_fuel + gst_amount
+
+    return {
+        "base_amount": base_amount,
+        "subtotal": subtotal,
+        "fuel_amount": fuel_amount,
+        "subtotal_with_fuel": subtotal_with_fuel,
+        "gst_amount": gst_amount,
+        "total_amount": total_amount,
+    }
 
 
 def generate_consignment_number() -> str:
@@ -164,24 +293,10 @@ async def create_invoice_for_consignment(
     """Auto-create an invoice when a consignment is created."""
     db = db_helper.db
     
-    # Calculate totals
-    base_rate = float(consignment_dict.get("base_rate", 0) or 0)
-    docket_charges = float(consignment_dict.get("docket_charges", 0) or 0)
-    oda_charge = float(consignment_dict.get("oda_charge", 0) or 0)
-    fov = float(consignment_dict.get("fov", 0) or 0)
-    fuel_charge = float(consignment_dict.get("fuel_charge", 0) or 0)
-    gst_percent = float(consignment_dict.get("gst", 18) or 0)
-    
-    # Calculate subtotal
-    subtotal = base_rate + docket_charges + oda_charge + fov
-    
-    # Apply fuel charge percentage
-    fuel_amount = subtotal * (fuel_charge / 100) if fuel_charge else 0
-    subtotal_with_fuel = subtotal + fuel_amount
-    
-    # Apply GST
-    gst_amount = subtotal_with_fuel * (gst_percent / 100)
-    total_amount = subtotal_with_fuel + gst_amount
+    financials = _calculate_financials(consignment_dict)
+    subtotal_with_fuel = financials["subtotal_with_fuel"]
+    gst_amount = financials["gst_amount"]
+    total_amount = financials["total_amount"]
 
     # Safe user details
     user = user or {}
@@ -280,12 +395,7 @@ async def create_consignment(
     consignment_dict["consignment_no"] = generate_consignment_number()
     if not consignment_dict.get("docket_no"):
         consignment_dict["docket_no"] = consignment_dict["consignment_no"]
-    consignment_dict["total"] = (
-        consignment_dict.get("base_rate", 0) + 
-        consignment_dict.get("docket_charges", 0) + 
-        consignment_dict.get("oda_charge", 0) + 
-        consignment_dict.get("fov", 0)
-    )
+    consignment_dict["total"] = _calculate_financials(consignment_dict)["total_amount"]
     consignment_dict["date"] = consignment_dict["date"].isoformat()
     consignment_dict["created_at"] = datetime.utcnow()
     consignment_dict["updated_at"] = datetime.utcnow()
@@ -516,19 +626,10 @@ async def sync_related_documents(db, consignment_doc):
     # 2. Update Invoice
     if consignment_doc.get("invoice_id"):
         try:
-            # Re-calculate totals
-            base_rate = float(consignment_doc.get("base_rate", 0) or 0)
-            docket_charges = float(consignment_doc.get("docket_charges", 0) or 0)
-            oda_charge = float(consignment_doc.get("oda_charge", 0) or 0)
-            fov = float(consignment_doc.get("fov", 0) or 0)
-            fuel_charge = float(consignment_doc.get("fuel_charge", 0) or 0)
-            gst_percent = float(consignment_doc.get("gst", 18) or 0)
-            
-            subtotal = base_rate + docket_charges + oda_charge + fov
-            fuel_amount = subtotal * (fuel_charge / 100) if fuel_charge else 0
-            subtotal_with_fuel = subtotal + fuel_amount
-            gst_amount = subtotal_with_fuel * (gst_percent / 100)
-            total_amount = subtotal_with_fuel + gst_amount
+            financials = _calculate_financials(consignment_doc)
+            subtotal_with_fuel = financials["subtotal_with_fuel"]
+            gst_amount = financials["gst_amount"]
+            total_amount = financials["total_amount"]
             
             curr_invoice = await db.invoices.find_one({"_id": ObjectId(consignment_doc["invoice_id"])})
             if curr_invoice:
@@ -590,11 +691,8 @@ async def update_consignment(
         if not doc:
             raise HTTPException(status_code=404, detail="Consignment not found")
         
-        base = update_data.get("base_rate", doc.get("base_rate", 0))
-        docket = update_data.get("docket_charges", doc.get("docket_charges", 0))
-        oda = update_data.get("oda_charge", doc.get("oda_charge", 0))
-        fov = update_data.get("fov", doc.get("fov", 0))
-        update_data["total"] = base + docket + oda + fov
+        merged_data = {**doc, **update_data}
+        update_data["total"] = _calculate_financials(merged_data)["total_amount"]
         update_data["updated_at"] = datetime.utcnow()
         
         await db.consignments.update_one(
@@ -635,11 +733,8 @@ async def patch_consignment(
             update_data["date"] = str(update_data["date"])
 
     # Recalculate total
-    base = update_data.get("base_rate", doc.get("base_rate", 0))
-    docket = update_data.get("docket_charges", doc.get("docket_charges", 0))
-    oda = update_data.get("oda_charge", doc.get("oda_charge", 0))
-    fov = update_data.get("fov", doc.get("fov", 0))
-    update_data["total"] = base + docket + oda + fov
+    merged_data = {**doc, **update_data}
+    update_data["total"] = _calculate_financials(merged_data)["total_amount"]
 
     update_data["updated_at"] = datetime.utcnow()
 

@@ -29,7 +29,7 @@ export default function Dashboard() {
       <aside className="sidebar">
         <div className="sidebar-header">
           <Package size={28} />
-          <span>RR Enterprise</span>
+          <span>RR Enterprises</span>
         </div>
 
         <nav className="sidebar-nav">
