@@ -628,12 +628,14 @@ export default function Home() {
   };
 
   const sponsors = [
-    { name: "TechCorp", logo: "📦" },
-    { name: "ShipGlobal", logo: "🌍" },
-    { name: "FastTrack", logo: "⚡" },
-    { name: "SecureFlow", logo: "🔒" },
-    { name: "LogisPro", logo: "📊" },
-    { name: "CloudSync", logo: "☁️" },
+    { name: "DTDC", logo: "📦" },
+    { name: "Delivery one", logo: "🌍" },
+    { name: "Rivigo", logo: "⚡" },
+    { name: "Movin.in", logo: "🔒" },
+    { name: "DTDC", logo: "📦" },
+    { name: "Delivery one", logo: "🌍" },
+    { name: "Rivigo", logo: "⚡" },
+    { name: "Movin.in", logo: "🔒" },
   ];
 
   const sponsorLoop = [...sponsors, ...sponsors];
