@@ -551,8 +551,8 @@ export default function Home() {
   const COURIER_CONFIG = [
     {
       name: "Delhivery",
-      // Exactly 12 digits (example: 123456789012)
-      pattern: /^\d{12}$/i,
+      // 9-12 digits
+      pattern: /^\d{9,12}$/i,
       getUrl: (trackingNo) =>
         `https://www.delhivery.com/track-v2/lr/${encodeURIComponent(trackingNo)}`,
     },
