@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends, Query
 from fastapi.responses import StreamingResponse
 from typing import List, Optional
 from bson import ObjectId
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from io import BytesIO
 import pandas as pd
 from openpyxl import Workbook
@@ -52,12 +52,17 @@ def _to_datetime(value) -> Optional[datetime]:
     if value is None:
         return None
     if isinstance(value, datetime):
+        if value.tzinfo is not None:
+            return value.astimezone(timezone.utc).replace(tzinfo=None)
         return value
     text = str(value).strip()
     if not text:
         return None
     try:
-        return datetime.fromisoformat(text.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        if parsed.tzinfo is not None:
+            return parsed.astimezone(timezone.utc).replace(tzinfo=None)
+        return parsed
     except Exception:
         return None
 
@@ -386,12 +391,16 @@ async def get_customer_ledger(
 ):
     """Get customer ledger statement built from invoice debits and payment credits."""
     db = db_helper.db
-    return await _generate_ledger_data(
-        db=db,
-        customer_id=customer_id,
-        from_date=from_date,
-        to_date=to_date,
-    )
+    try:
+        return await _generate_ledger_data(
+            db=db,
+            customer_id=customer_id,
+            from_date=from_date,
+            to_date=to_date,
+        )
+    except Exception as exc:
+        print(f"Ledger API failed: {exc}")
+        raise HTTPException(status_code=500, detail="Failed to generate ledger statement")
 
 
 @router.get("/ledger/excel")
@@ -403,12 +412,16 @@ async def export_customer_ledger_excel(
 ):
     """Export customer ledger statement to Excel."""
     db = db_helper.db
-    ledger_data = await _generate_ledger_data(
-        db=db,
-        customer_id=customer_id,
-        from_date=from_date,
-        to_date=to_date,
-    )
+    try:
+        ledger_data = await _generate_ledger_data(
+            db=db,
+            customer_id=customer_id,
+            from_date=from_date,
+            to_date=to_date,
+        )
+    except Exception as exc:
+        print(f"Ledger Excel export failed: {exc}")
+        raise HTTPException(status_code=500, detail="Failed to export ledger excel")
 
     def _fmt_amount(value: float) -> str:
         return f"{float(value or 0):,.2f}"
@@ -549,13 +562,17 @@ async def export_customer_ledger_pdf(
 ):
     """Export customer ledger statement to PDF."""
     db = db_helper.db
-    ledger_data = await _generate_ledger_data(
-        db=db,
-        customer_id=customer_id,
-        from_date=from_date,
-        to_date=to_date,
-    )
-    pdf_buf = _build_ledger_pdf(ledger_data)
+    try:
+        ledger_data = await _generate_ledger_data(
+            db=db,
+            customer_id=customer_id,
+            from_date=from_date,
+            to_date=to_date,
+        )
+        pdf_buf = _build_ledger_pdf(ledger_data)
+    except Exception as exc:
+        print(f"Ledger PDF export failed: {exc}")
+        raise HTTPException(status_code=500, detail="Failed to export ledger pdf")
 
     file_customer = (ledger_data.get("customer_name") or "all_customers").replace(" ", "_").lower()
     filename = f"ledger_statement_{file_customer}.pdf"
