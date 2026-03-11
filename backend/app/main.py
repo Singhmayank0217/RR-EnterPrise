@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+from .config import settings
 from .database import connect_to_mongo, close_mongo_connection
 from .routers import auth, shipments, pricing, invoices, consignments, rate_cards
 
@@ -23,7 +24,8 @@ app = FastAPI(
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify the Cloudflare Pages URL
+    allow_origins=settings.get_cors_origins(),
+    allow_origin_regex=settings.CORS_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

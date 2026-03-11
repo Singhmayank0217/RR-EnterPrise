@@ -422,7 +422,7 @@ def _serialize_consignment_report_item(doc: Dict) -> ConsignmentReportItem:
     return ConsignmentReportItem(
         _id=str(doc_id or ""),
         name=str(doc.get("name") or ""),
-        date=doc.get("date"),
+        date=_normalize_report_date(doc.get("date")),
         docket_no=docket_no,
         city=_extract_consignment_city(doc),
         weight=_safe_float(doc.get("weight"), 0.0),
@@ -444,6 +444,18 @@ def _to_report_datetime(value) -> Optional[datetime]:
         return datetime.fromisoformat(text.replace("Z", "+00:00"))
     except Exception:
         return None
+
+
+def _normalize_report_date(value) -> Optional[date]:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+
+    parsed = _to_report_datetime(value)
+    return parsed.date() if parsed else None
 
 
 def _format_report_date(value) -> str:
@@ -663,7 +675,11 @@ async def get_consignment_report(
     report_items = []
 
     async for doc in cursor:
-        report_items.append(_serialize_consignment_report_item(doc))
+        try:
+            report_items.append(_serialize_consignment_report_item(doc))
+        except Exception as exc:
+            print(f"Skipping invalid consignment report row {doc.get('_id', 'unknown')}: {exc}")
+            continue
 
     return report_items
 
@@ -702,7 +718,11 @@ async def export_consignment_report_pdf(
     cursor = db.consignments.find(query).sort("date", -1)
     report_rows: List[ConsignmentReportItem] = []
     async for doc in cursor:
-        report_rows.append(_serialize_consignment_report_item(doc))
+        try:
+            report_rows.append(_serialize_consignment_report_item(doc))
+        except Exception as exc:
+            print(f"Skipping invalid consignment report row {doc.get('_id', 'unknown')}: {exc}")
+            continue
 
     pdf_buffer = _build_consignment_report_pdf(report_rows)
     filename = f"consignment_report_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pdf"
