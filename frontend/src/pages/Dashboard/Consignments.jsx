@@ -454,11 +454,12 @@ function Consignments() {
       }
     });
 
+    // Keep client preview consistent with backend: air takes precedence, then cargo slab.
     let divisor = 4500;
-    if (serviceType === 'cargo') {
-      divisor = totalCft > 10 ? 2700 : 4500;
-    } else if (mode === 'air') {
+    if (mode === 'air') {
       divisor = 5000;
+    } else if (serviceType === 'cargo') {
+      divisor = totalCft > 10 ? 2700 : 4500;
     }
 
     const volumetricWeight = totalCm3 > 0 ? totalCm3 / divisor : 0;

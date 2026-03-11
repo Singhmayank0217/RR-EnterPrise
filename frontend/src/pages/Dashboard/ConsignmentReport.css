@@ -1,0 +1,228 @@
+.consignment-report-card {
+  margin-top: 2rem;
+  overflow: hidden;
+}
+
+.consignment-report-card__header {
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.consignment-report-card__subtext {
+  margin: 0.35rem 0 0;
+  color: #64748b;
+  max-width: 720px;
+}
+
+.consignment-report-card__actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.consignment-report-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+  padding: 0 1.5rem 1.5rem;
+}
+
+.consignment-report-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.consignment-report-field span {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #475569;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.consignment-report-field input {
+  min-height: 44px;
+  border: 1px solid #dbe3ef;
+  border-radius: 14px;
+  padding: 0.75rem 0.9rem;
+  font-size: 0.95rem;
+  color: #0f172a;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.consignment-report-field input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.12);
+}
+
+.consignment-report-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0 1.5rem 1rem;
+  flex-wrap: wrap;
+}
+
+.consignment-report-toolbar__meta {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.consignment-report-toolbar__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.75rem;
+  background: #e2e8f0;
+  border-radius: 999px;
+  color: #334155;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.consignment-report-toolbar__badge.accent {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.consignment-report-toolbar__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: #475569;
+  font-size: 0.9rem;
+}
+
+.consignment-report-table-wrap {
+  overflow-x: auto;
+  padding: 0 1.5rem 1.5rem;
+}
+
+.consignment-report-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.consignment-report-table thead th {
+  background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
+  color: #1e3a8a;
+  text-align: left;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0.95rem 1rem;
+  border-bottom: 1px solid #cbd5e1;
+}
+
+.consignment-report-table tbody td {
+  padding: 0.9rem 1rem;
+  border-bottom: 1px solid #eef2f7;
+  color: #0f172a;
+  font-size: 0.95rem;
+  background: #ffffff;
+}
+
+.consignment-report-table tbody tr:hover td {
+  background: #f8fbff;
+}
+
+.consignment-report-table tbody tr.selected td {
+  background: #eff6ff;
+}
+
+.consignment-report-table th:first-child,
+.consignment-report-table td:first-child {
+  width: 56px;
+  text-align: center;
+}
+
+.consignment-report-table .numeric {
+  text-align: right;
+}
+
+.consignment-report-table .amount {
+  font-weight: 700;
+  color: #0f766e;
+}
+
+.consignment-report-table input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  accent-color: #2563eb;
+  cursor: pointer;
+}
+
+.consignment-report-empty {
+  text-align: center;
+  color: #64748b;
+  padding: 2rem 1rem !important;
+}
+
+.consignment-report-empty.error {
+  color: #b91c1c;
+}
+
+.consignment-report-empty .spin {
+  margin-right: 0.45rem;
+}
+
+.consignment-report-total-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem 1.5rem;
+  border-top: 1px solid #e2e8f0;
+  background:
+    linear-gradient(135deg, rgba(219, 234, 254, 0.7), rgba(255, 255, 255, 0.95)),
+    radial-gradient(circle at top left, rgba(14, 165, 233, 0.18), transparent 40%);
+}
+
+.consignment-report-total-row__label {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: #1e3a8a;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.consignment-report-total-row p {
+  margin: 0;
+  color: #475569;
+}
+
+.consignment-report-total-row strong {
+  font-size: 1.5rem;
+  color: #0f172a;
+}
+
+@media (max-width: 768px) {
+  .consignment-report-card__header,
+  .consignment-report-total-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .consignment-report-card__actions {
+    width: 100%;
+  }
+
+  .consignment-report-card__actions .btn {
+    flex: 1;
+    justify-content: center;
+  }
+}

@@ -550,9 +550,19 @@ export default function Home() {
 
   const COURIER_CONFIG = [
     {
+      name: "Trackon",
+      // Trackon format: exactly 12 numeric digits (example: 500404798916)
+      pattern: /^\d{12}$/,
+      getUrl: (trackingNo) => {
+        const encoded = encodeURIComponent(trackingNo);
+        // Best-effort prefill keys; Trackon may ignore unsupported params on their side.
+        return `https://www.trackon.in/courier-tracking?awb=${encoded}&track=${encoded}&trackingNo=${encoded}&docket=${encoded}`;
+      },
+    },
+    {
       name: "Delhivery",
-      // 9-12 digits
-      pattern: /^\d{9,12}$/i,
+      // 9-11 digits (12-digit numeric codes are reserved for Trackon above)
+      pattern: /^\d{9,11}$/i,
       getUrl: (trackingNo) =>
         `https://www.delhivery.com/track-v2/lr/${encodeURIComponent(trackingNo)}`,
     },
@@ -632,10 +642,12 @@ export default function Home() {
     { name: "Delivery one", logo: "🌍" },
     { name: "Rivigo", logo: "⚡" },
     { name: "Movin.in", logo: "🔒" },
+    { name: "Trackon", logo: "🚚" },
     { name: "DTDC", logo: "📦" },
     { name: "Delivery one", logo: "🌍" },
     { name: "Rivigo", logo: "⚡" },
     { name: "Movin.in", logo: "🔒" },
+    { name: "Trackon", logo: "🚚" },
   ];
 
   const sponsorLoop = [...sponsors, ...sponsors];
@@ -758,7 +770,7 @@ export default function Home() {
                   <Search style={styles.searchIcon} size={20} />
                   <input
                     type="text"
-                    placeholder="Enter tracking number..."
+                    placeholder="Enter tracking number (Trackon: 12 digits)..."
                     value={trackingNumber}
                     onChange={(e) => setTrackingNumber(e.target.value)}
                     onKeyDown={(e) => {

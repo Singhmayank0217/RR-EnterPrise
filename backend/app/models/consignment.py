@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import Optional, List
-from datetime import datetime, date
+from datetime import datetime, date as consignment_date
 from enum import Enum
 
 
@@ -22,7 +22,7 @@ class BoxDimensions(BaseModel):
 
 
 class ConsignmentBase(BaseModel):
-    date: date
+    date: consignment_date
     name: str  # Customer/sender name (display)
     docket_no: Optional[str] = None
     user_id: Optional[str] = None  # Link to user
@@ -62,7 +62,7 @@ class ConsignmentCreate(ConsignmentBase):
 
 
 class ConsignmentUpdate(BaseModel):
-    date: Optional[date] = None
+    date: Optional[consignment_date] = None
     name: Optional[str] = None
     docket_no: Optional[str] = None
     user_id: Optional[str] = None
@@ -109,7 +109,7 @@ class ConsignmentInDB(ConsignmentBase):
         populate_by_name = True
         json_encoders = {
             datetime: lambda v: v.isoformat(),
-            date: lambda v: v.isoformat()
+            consignment_date: lambda v: v.isoformat()
         }
 
 
@@ -123,3 +123,19 @@ class ConsignmentResponse(ConsignmentBase):
 
     class Config:
         populate_by_name = True
+
+
+class ConsignmentReportItem(BaseModel):
+    id: str = Field(alias="_id")
+    name: str
+    date: Optional[consignment_date] = None
+    docket_no: Optional[str] = None
+    city: Optional[str] = None
+    weight: float = 0
+    amount: float = 0
+
+    class Config:
+        populate_by_name = True
+        json_encoders = {
+            consignment_date: lambda value: value.isoformat() if value else None
+        }

@@ -103,6 +103,14 @@ export const consignmentsAPI = {
     const queryParams = new URLSearchParams(params).toString();
     return api.get(`/consignments/?${queryParams}`);
   },
+  report: (params = {}) => {
+    const queryParams = new URLSearchParams(params).toString();
+    return api.get(`/consignments/report?${queryParams}`);
+  },
+  exportReportPDF: (params = {}) => {
+    const queryParams = new URLSearchParams(params).toString();
+    return api.get(`/consignments/report/pdf?${queryParams}`, { responseType: 'blob' });
+  },
   get: (id) => api.get(`/consignments/${id}`),
   getByUser: (userId) => api.get(`/consignments/by-user/${userId}`),
   getByInvoice: (invoiceId) => api.get(`/consignments/by-invoice/${invoiceId}`),

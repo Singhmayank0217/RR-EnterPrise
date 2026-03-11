@@ -6,9 +6,15 @@ from datetime import datetime, date, timedelta
 from io import BytesIO
 import re
 import pandas as pd
+from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
+from reportlab.lib.units import mm
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
 from ..database import db_helper
 from ..models.consignment import (
-    ConsignmentCreate, ConsignmentResponse, ConsignmentUpdate, ConsignmentZone
+    ConsignmentCreate, ConsignmentReportItem, ConsignmentResponse, ConsignmentUpdate, ConsignmentZone
 )
 from ..models.shipment import ShipmentStatus, ShipmentType, Address, TrackingEvent
 from ..models.invoice import PaymentStatus, InvoiceItem, PaymentMethod
@@ -96,14 +102,12 @@ def _calculate_chargeable_weight(consignment_data: Dict) -> Dict[str, float]:
             total_cm3 += volume_cm3
             total_cft += volume_cm3 / 28316.846592
 
+    # Air mode should always use air divisor. Surface cargo then applies CFT slabs.
     divisor = 4500.0
-    if service_type == "cargo":
-        if total_cft > 10:
-            divisor = 2700.0
-        else:
-            divisor = 4500.0
-    elif mode == "air":
+    if mode == "air":
         divisor = 5000.0
+    elif service_type == "cargo":
+        divisor = 2700.0 if total_cft > 10 else 4500.0
 
     volumetric_weight = (total_cm3 / divisor) if total_cm3 > 0 else 0.0
     chargeable_weight = max(weight_kg, volumetric_weight)
@@ -354,6 +358,190 @@ async def create_invoice_for_consignment(
     
     return invoice_id, invoice["invoice_number"]
 
+
+def _extract_consignment_city(doc: Dict) -> str:
+    city = str(doc.get("destination_city") or "").strip()
+    if city:
+        return city
+
+    destination = str(doc.get("destination") or "").strip()
+    if not destination:
+        return ""
+
+    parts = [part.strip() for part in destination.split(",") if part.strip()]
+    return parts[-1] if parts else destination
+
+
+def _build_report_filters(
+    name: Optional[str] = None,
+    city: Optional[str] = None,
+    docket_no: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+) -> Dict:
+    query: Dict = {}
+    and_conditions = []
+
+    if start_date or end_date:
+        date_query = {}
+        if start_date:
+            date_query["$gte"] = start_date
+        if end_date:
+            date_query["$lte"] = end_date
+        query["date"] = date_query
+
+    if name:
+        query["name"] = {"$regex": re.escape(name.strip()), "$options": "i"}
+
+    if docket_no:
+        query["docket_no"] = {"$regex": re.escape(docket_no.strip()), "$options": "i"}
+
+    if city:
+        city_regex = {"$regex": re.escape(city.strip()), "$options": "i"}
+        and_conditions.append({
+            "$or": [
+                {"destination_city": city_regex},
+                {"destination": city_regex},
+            ]
+        })
+
+    if and_conditions:
+        query.setdefault("$and", []).extend(and_conditions)
+
+    return query
+
+
+def _serialize_consignment_report_item(doc: Dict) -> ConsignmentReportItem:
+    doc_id = doc.get("_id")
+    if isinstance(doc_id, ObjectId):
+        doc_id = str(doc_id)
+
+    docket_no = doc.get("docket_no") or doc.get("docketNo") or doc.get("consignment_no")
+    amount = _safe_float(doc.get("total"), 0.0)
+
+    return ConsignmentReportItem(
+        _id=str(doc_id or ""),
+        name=str(doc.get("name") or ""),
+        date=doc.get("date"),
+        docket_no=docket_no,
+        city=_extract_consignment_city(doc),
+        weight=_safe_float(doc.get("weight"), 0.0),
+        amount=amount,
+    )
+
+
+def _to_report_datetime(value) -> Optional[datetime]:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, date):
+        return datetime.combine(value, datetime.min.time())
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+
+def _format_report_date(value) -> str:
+    parsed = _to_report_datetime(value)
+    if not parsed:
+        return "-"
+    return parsed.strftime("%d/%m/%Y")
+
+
+def _build_consignment_report_pdf(rows: List[ConsignmentReportItem]) -> BytesIO:
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        "ConsignmentReportTitle",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=13,
+        alignment=TA_CENTER,
+    )
+    info_style = ParagraphStyle(
+        "ConsignmentReportInfo",
+        parent=styles["Normal"],
+        fontName="Helvetica",
+        fontSize=9,
+        alignment=TA_LEFT,
+    )
+
+    output = BytesIO()
+    doc = SimpleDocTemplate(
+        output,
+        pagesize=A4,
+        leftMargin=8 * mm,
+        rightMargin=8 * mm,
+        topMargin=8 * mm,
+        bottomMargin=8 * mm,
+    )
+
+    story = [
+        Paragraph("R. R. ENTERPRISES", title_style),
+        Spacer(1, 2),
+        Paragraph(f"Print Date: {datetime.now().strftime('%d/%m/%Y, %I:%M:%S %p')}", info_style),
+        Spacer(1, 5),
+    ]
+
+    table_data = [["Sr.", "Name", "Date", "Docket No", "City", "Weight", "Amount"]]
+    total_amount = 0.0
+
+    for index, row in enumerate(rows, start=1):
+        row_amount = _safe_float(row.amount, 0.0)
+        total_amount += row_amount
+        table_data.append([
+            str(index),
+            str(row.name or "-"),
+            _format_report_date(row.date),
+            str(row.docket_no or "-"),
+            str(row.city or "-"),
+            f"{_safe_float(row.weight, 0.0):,.2f}",
+            f"{row_amount:,.2f}",
+        ])
+
+    table_data.append(["", "", "", "", "", "Total Amount", f"{total_amount:,.2f}"])
+
+    usable_width = A4[0] - doc.leftMargin - doc.rightMargin
+    col_widths = [14 * mm, 54 * mm, 24 * mm, 34 * mm, 40 * mm, 24 * mm, 26 * mm]
+    consumed_width = sum(col_widths)
+    if consumed_width > usable_width:
+        scale = usable_width / consumed_width
+        col_widths = [width * scale for width in col_widths]
+    elif consumed_width < usable_width:
+        col_widths[1] += usable_width - consumed_width
+
+    table = Table(table_data, colWidths=col_widths, repeatRows=1)
+
+    last_row = len(table_data) - 1
+    table.setStyle(TableStyle([
+        ("GRID", (0, 0), (-1, -1), 0.6, colors.black),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTNAME", (0, last_row), (-1, last_row), "Helvetica-Bold"),
+        ("FONTNAME", (0, 1), (-1, last_row - 1), "Helvetica"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN", (0, 0), (0, -1), "CENTER"),
+        ("ALIGN", (1, 0), (4, -1), "LEFT"),
+        ("ALIGN", (2, 0), (2, -1), "CENTER"),
+        ("ALIGN", (5, 0), (6, -1), "RIGHT"),
+        ("SPAN", (0, last_row), (5, last_row)),
+        ("ALIGN", (0, last_row), (5, last_row), "RIGHT"),
+        ("ALIGN", (6, last_row), (6, last_row), "RIGHT"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]))
+
+    story.append(table)
+    doc.build(story)
+    output.seek(0)
+    return output
+
 @router.post("/", response_model=ConsignmentResponse)
 async def create_consignment(
     consignment: ConsignmentCreate,
@@ -449,6 +637,81 @@ async def create_consignment(
         print(f"Failed to create invoice: {e}")
     
     return ConsignmentResponse(**consignment_dict)
+
+
+@router.get("/report", response_model=List[ConsignmentReportItem], response_model_by_alias=False)
+async def get_consignment_report(
+    name: Optional[str] = None,
+    city: Optional[str] = None,
+    docket_no: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    token_data: TokenData = Depends(require_admin)
+):
+    """Return filtered consignment report rows with only report fields."""
+    db = db_helper.db
+
+    query = _build_report_filters(
+        name=name,
+        city=city,
+        docket_no=docket_no,
+        start_date=start_date,
+        end_date=end_date,
+    )
+
+    cursor = db.consignments.find(query).sort("date", -1)
+    report_items = []
+
+    async for doc in cursor:
+        report_items.append(_serialize_consignment_report_item(doc))
+
+    return report_items
+
+
+@router.get("/report/pdf")
+async def export_consignment_report_pdf(
+    ids: Optional[str] = None,
+    name: Optional[str] = None,
+    city: Optional[str] = None,
+    docket_no: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    token_data: TokenData = Depends(require_admin)
+):
+    """Export selected/report consignments as invoice-style PDF sheet."""
+    db = db_helper.db
+
+    query = _build_report_filters(
+        name=name,
+        city=city,
+        docket_no=docket_no,
+        start_date=start_date,
+        end_date=end_date,
+    )
+
+    if ids:
+        selected_ids = [item.strip() for item in ids.split(",") if item.strip()]
+        object_ids = []
+        for raw_id in selected_ids:
+            if not ObjectId.is_valid(raw_id):
+                raise HTTPException(status_code=400, detail=f"Invalid consignment id: {raw_id}")
+            object_ids.append(ObjectId(raw_id))
+
+        query["_id"] = {"$in": object_ids}
+
+    cursor = db.consignments.find(query).sort("date", -1)
+    report_rows: List[ConsignmentReportItem] = []
+    async for doc in cursor:
+        report_rows.append(_serialize_consignment_report_item(doc))
+
+    pdf_buffer = _build_consignment_report_pdf(report_rows)
+    filename = f"consignment_report_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pdf"
+
+    return StreamingResponse(
+        pdf_buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/", response_model=List[ConsignmentResponse])

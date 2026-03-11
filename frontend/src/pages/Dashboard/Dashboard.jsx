@@ -1,7 +1,7 @@
 import { Routes, Route, NavLink, useNavigate } from 'react-router-dom';
 import { 
   Package, Truck, FileText, DollarSign, Users, Settings, 
-  LogOut, Home, BarChart3, Plus, ClipboardList, CreditCard 
+  LogOut, Home, BarChart3, Plus, ClipboardList, CreditCard, FileSpreadsheet 
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import ShipmentsPage from './Shipments';
@@ -13,6 +13,7 @@ import PricingRulesPage from './PricingRules';
 import RateCardsPage from './RateCards';
 import ReportsPage from './Reports';
 import LedgerStatementPage from './LedgerStatement';
+import ConsignmentReport from './ConsignmentReport';
 import './Dashboard.css';
 
 export default function Dashboard() {
@@ -86,6 +87,11 @@ export default function Dashboard() {
                 <FileText size={20} />
                 <span>Ledger Statement</span>
               </NavLink>
+
+              <NavLink to="/dashboard/consignment-report" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} title="Filter consignments, select rows, and export them to PDF">
+                <FileSpreadsheet size={20} />
+                <span>Consignment Report</span>
+              </NavLink>
             </>
           )}
         </nav>
@@ -116,6 +122,7 @@ export default function Dashboard() {
           <Route path="rate-cards" element={<RateCardsPage />} />
           <Route path="reports" element={<ReportsPage />} />
           <Route path="ledger-statement" element={<LedgerStatementPage />} />
+          <Route path="consignment-report" element={<ConsignmentReport />} />
         </Routes>
       </main>
     </div>
